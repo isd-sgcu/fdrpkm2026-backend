@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+prettier_bin="./node_modules/.bin/prettier"
+eslint_bin="./node_modules/.bin/eslint"
+
+if [ ! -x "$prettier_bin" ]; then
+  echo "pre-commit: missing Prettier. Run bun install first."
+  exit 1
+fi
+
+if [ ! -x "$eslint_bin" ]; then
+  echo "pre-commit: missing ESLint. Run bun install first."
+  exit 1
+fi
+
+staged_files=()
+while IFS= read -r file; do
+  [ -n "$file" ] && staged_files+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ "${#staged_files[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+existing_files=()
+lint_files=()
+
+for file in "${staged_files[@]}"; do
+  [ -f "$file" ] || continue
+  existing_files+=("$file")
+
+  case "$file" in
+    *.js|*.mjs|*.cjs|*.ts)
+      lint_files+=("$file")
+      ;;
+  esac
+done
+
+if [ "${#existing_files[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+echo "pre-commit: formatting staged files..."
+"$prettier_bin" --write --ignore-unknown "${existing_files[@]}"
+git add -- "${existing_files[@]}"
+
+if [ "${#lint_files[@]}" -gt 0 ]; then
+  echo "pre-commit: linting staged files..."
+  "$eslint_bin" "${lint_files[@]}"
+fi

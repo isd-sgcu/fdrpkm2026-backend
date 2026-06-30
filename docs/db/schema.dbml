@@ -1,0 +1,138 @@
+// FD x RPKM shared schema -- paste into https://dbdiagram.io
+// Export to PNG SVG PDF or PostgreSQL SQL.
+// CONVENTIONS:
+//   - every id is uuid, default gen_random_uuid()
+//   - every FK is uuid
+//   - every table has created_at + updated_at (timestamptz, default now())
+//   - notes kept plain ascii (no parens/double-dash/apostrophes) or dbdiagram draws phantom lines
+//   - QR payload is students.student_id (CUNET), NOT the uuid pk
+
+Table students {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id varchar [unique, note: 'CUNET id. QR payload. prefix 69 means year one']
+  email varchar [unique, note: 'from Chula SSO']
+  first_name varchar
+  last_name varchar
+  nickname varchar
+  faculty varchar
+  department varchar
+  year varchar
+  phone varchar
+  line_id varchar
+  emergency_contact_name varchar
+  emergency_contact_phone varchar
+  allergies text
+  dietary text
+  medical_notes text
+  role varchar [note: 'student or staff']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table registrations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [ref: > students.id]
+  project varchar [note: 'firstdate or rpkm']
+  pdpa_accepted_at timestamptz
+  attended_days int [null, note: 'RPKM carbon days attended']
+  group_id uuid [ref: > groups.id, null, note: 'RPKM only. SET NULL on group delete']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (student_id, project) [unique]
+    group_id [note: 'membership lookups']
+  }
+}
+
+Table travel_legs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  registration_id uuid [ref: > registrations.id, note: 'CASCADE on delete']
+  seq int [note: '1 or 2. CHECK in 1 2']
+  vehicle varchar [note: 'private_car private_ev transit bus taxi motorcycle bike_walk other']
+  vehicle_other varchar [null]
+  origin varchar [note: 'district code or other']
+  origin_other varchar [null]
+  destination varchar [note: 'chula or district code or other']
+  destination_other varchar [null]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (registration_id, seq) [unique]
+  }
+}
+
+Table fd_entries {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [ref: > students.id, note: 'the freshman who entered']
+  scanned_by uuid [ref: > students.id, note: 'staff who scanned']
+  scanned_at timestamptz [note: 'event time of the scan']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    student_id [unique, note: 'one entry per student. FD only']
+  }
+}
+
+Table checkpoints {
+  id uuid [pk, default: `gen_random_uuid()`]
+  game varchar [note: 'jigsaw 10 points or csr 35 points']
+  code varchar [unique, note: 'QR payload']
+  lat numeric [null]
+  lng numeric [null]
+  geofence_radius_m int [note: 'default 50']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table scans {
+  id uuid [pk, default: `gen_random_uuid()`]
+  checkpoint_id uuid [ref: > checkpoints.id]
+  student_id uuid [ref: > students.id, note: 'self scan. gets credit']
+  scanned_at timestamptz [note: 'logging requirement. event time']
+  lat numeric [null]
+  lng numeric [null]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (checkpoint_id, student_id) [unique, note: 'one credit per point']
+    student_id [note: 'per student progress']
+  }
+}
+
+Table houses {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar [unique, note: 'name and desc in i18n. 22 rows']
+  capacity int [null]
+  info jsonb [null]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table groups {
+  id uuid [pk, default: `gen_random_uuid()`]
+  leader_id uuid [ref: > students.id]
+  join_code varchar [unique, note: '6 digit regenerable']
+  assigned_house_id uuid [ref: > houses.id, null, note: 'set by random']
+  assigned_at timestamptz [null]
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table group_house_choices {
+  id uuid [pk, default: `gen_random_uuid()`]
+  group_id uuid [ref: > groups.id, note: 'CASCADE on group delete']
+  house_id uuid [ref: > houses.id]
+  rank int [note: 'CHECK between 1 and 5']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (group_id, rank) [unique]
+    (group_id, house_id) [unique]
+    house_id [note: 'demand per house GROUP BY']
+  }
+}
