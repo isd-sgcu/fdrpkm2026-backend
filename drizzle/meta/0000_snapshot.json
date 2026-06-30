@@ -1,5 +1,5 @@
 {
-  "id": "b2b1d2a1-6ec7-4139-9604-753d34bd998b",
+  "id": "9ca3aa85-75f5-4ce1-9fa5-36500ba6739c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -315,8 +315,7 @@
         },
         "origin": {
           "name": "origin",
-          "type": "travel_origin",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -328,8 +327,7 @@
         },
         "destination": {
           "name": "destination",
-          "type": "travel_destination",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -969,43 +967,12 @@
     }
   },
   "enums": {
-    "public.travel_destination": {
-      "name": "travel_destination",
-      "schema": "public",
-      "values": [
-        "ratchathewi",
-        "watthana",
-        "khlong_toei",
-        "sathon",
-        "bang_rak",
-        "phaya_thai",
-        "din_daeng",
-        "huai_khwang",
-        "other",
-        "chula"
-      ]
-    },
     "public.game": {
       "name": "game",
       "schema": "public",
       "values": [
         "jigsaw",
         "csr"
-      ]
-    },
-    "public.travel_origin": {
-      "name": "travel_origin",
-      "schema": "public",
-      "values": [
-        "ratchathewi",
-        "watthana",
-        "khlong_toei",
-        "sathon",
-        "bang_rak",
-        "phaya_thai",
-        "din_daeng",
-        "huai_khwang",
-        "other"
       ]
     },
     "public.project": {

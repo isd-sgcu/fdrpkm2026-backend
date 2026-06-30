@@ -1,6 +1,4 @@
-CREATE TYPE "public"."travel_destination" AS ENUM('ratchathewi', 'watthana', 'khlong_toei', 'sathon', 'bang_rak', 'phaya_thai', 'din_daeng', 'huai_khwang', 'other', 'chula');--> statement-breakpoint
 CREATE TYPE "public"."game" AS ENUM('jigsaw', 'csr');--> statement-breakpoint
-CREATE TYPE "public"."travel_origin" AS ENUM('ratchathewi', 'watthana', 'khlong_toei', 'sathon', 'bang_rak', 'phaya_thai', 'din_daeng', 'huai_khwang', 'other');--> statement-breakpoint
 CREATE TYPE "public"."project" AS ENUM('firstdate', 'rpkm');--> statement-breakpoint
 CREATE TYPE "public"."role" AS ENUM('student', 'staff');--> statement-breakpoint
 CREATE TYPE "public"."vehicle" AS ENUM('private_car', 'private_ev', 'transit', 'bus', 'taxi', 'motorcycle', 'bike_walk', 'other');--> statement-breakpoint
@@ -45,9 +43,9 @@ CREATE TABLE "travel_legs" (
 	"seq" integer NOT NULL,
 	"vehicle" "vehicle" NOT NULL,
 	"vehicle_other" text,
-	"origin" "travel_origin" NOT NULL,
+	"origin" text NOT NULL,
 	"origin_other" text,
-	"destination" "travel_destination" NOT NULL,
+	"destination" text NOT NULL,
 	"destination_other" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,

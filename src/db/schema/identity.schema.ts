@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
 
-import { destinationEnum, originEnum, projectEnum, roleEnum, vehicleEnum } from "./enums";
+import { projectEnum, roleEnum, vehicleEnum } from "./enums";
 import { id, timestamps } from "./helper";
 import { groups } from "./houses.schema";
 
@@ -68,9 +68,10 @@ export const travelLegs = t.pgTable(
     seq: t.integer("seq").notNull(),
     vehicle: vehicleEnum("vehicle").notNull(),
     vehicleOther: t.text("vehicle_other"),
-    origin: originEnum("origin").notNull(),
+    // district codes are free text — not validated in the backend (frontend sends them).
+    origin: t.text("origin").notNull(),
     originOther: t.text("origin_other"),
-    destination: destinationEnum("destination").notNull(),
+    destination: t.text("destination").notNull(),
     destinationOther: t.text("destination_other"),
     ...timestamps
   },

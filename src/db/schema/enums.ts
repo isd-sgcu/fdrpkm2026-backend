@@ -18,19 +18,5 @@ export const vehicleEnum = pgEnum("vehicle", [
   "other"
 ]);
 
-// district codes shared by origin + destination. "other" -> matching *_other free text.
-const DISTRICT_CODES = [
-  "ratchathewi",
-  "watthana",
-  "khlong_toei",
-  "sathon",
-  "bang_rak",
-  "phaya_thai",
-  "din_daeng",
-  "huai_khwang",
-  "other"
-] as const;
-
-export const originEnum = pgEnum("travel_origin", DISTRICT_CODES);
-// destination = districts + chula
-export const destinationEnum = pgEnum("travel_destination", [...DISTRICT_CODES, "chula"] as const);
+// Districts (origin/destination) are NOT validated in the backend — the frontend sends the
+// district code as free text. The matching *_other free text still applies when the code is "other".

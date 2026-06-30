@@ -1,6 +1,6 @@
 {
-  "id": "6840f600-643e-4d38-a519-dce833b8e642",
-  "prevId": "b2b1d2a1-6ec7-4139-9604-753d34bd998b",
+  "id": "d5538ccc-e4a4-4c48-8faf-ca3efb1efee2",
+  "prevId": "9ca3aa85-75f5-4ce1-9fa5-36500ba6739c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -73,48 +73,48 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "registrations_student_id_students_id_fk": {
           "name": "registrations_student_id_students_id_fk",
           "tableFrom": "registrations",
+          "tableTo": "students",
           "columnsFrom": [
             "student_id"
           ],
-          "tableTo": "students",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "registrations_group_id_groups_id_fk": {
           "name": "registrations_group_id_groups_id_fk",
           "tableFrom": "registrations",
+          "tableTo": "groups",
           "columnsFrom": [
             "group_id"
           ],
-          "tableTo": "groups",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "registrations_student_project_unique": {
           "name": "registrations_student_project_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "student_id",
             "project"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -251,15 +251,15 @@
           "columns": [
             {
               "expression": "lower(\"email\")",
-              "isExpression": true,
               "asc": true,
+              "isExpression": true,
               "nulls": "last"
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -267,10 +267,10 @@
       "uniqueConstraints": {
         "students_student_id_unique": {
           "name": "students_student_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "student_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -315,8 +315,7 @@
         },
         "origin": {
           "name": "origin",
-          "type": "travel_origin",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -328,8 +327,7 @@
         },
         "destination": {
           "name": "destination",
-          "type": "travel_destination",
-          "typeSchema": "public",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -366,35 +364,35 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "travel_legs_registration_id_registrations_id_fk": {
           "name": "travel_legs_registration_id_registrations_id_fk",
           "tableFrom": "travel_legs",
+          "tableTo": "registrations",
           "columnsFrom": [
             "registration_id"
           ],
-          "tableTo": "registrations",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "travel_legs_registration_seq_unique": {
           "name": "travel_legs_registration_seq_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "registration_id",
             "seq"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -468,38 +466,38 @@
         "fd_entries_student_id_students_id_fk": {
           "name": "fd_entries_student_id_students_id_fk",
           "tableFrom": "fd_entries",
+          "tableTo": "students",
           "columnsFrom": [
             "student_id"
           ],
-          "tableTo": "students",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "fd_entries_scanned_by_students_id_fk": {
           "name": "fd_entries_scanned_by_students_id_fk",
           "tableFrom": "fd_entries",
+          "tableTo": "students",
           "columnsFrom": [
             "scanned_by"
           ],
-          "tableTo": "students",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "fd_entries_student_unique": {
           "name": "fd_entries_student_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "student_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -570,10 +568,10 @@
       "uniqueConstraints": {
         "checkpoints_code_unique": {
           "name": "checkpoints_code_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "code"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -649,48 +647,48 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "scans_checkpoint_id_checkpoints_id_fk": {
           "name": "scans_checkpoint_id_checkpoints_id_fk",
           "tableFrom": "scans",
+          "tableTo": "checkpoints",
           "columnsFrom": [
             "checkpoint_id"
           ],
-          "tableTo": "checkpoints",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "scans_student_id_students_id_fk": {
           "name": "scans_student_id_students_id_fk",
           "tableFrom": "scans",
+          "tableTo": "students",
           "columnsFrom": [
             "student_id"
           ],
-          "tableTo": "students",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "scans_checkpoint_student_unique": {
           "name": "scans_checkpoint_student_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "checkpoint_id",
             "student_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -753,56 +751,56 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "group_house_choices_group_id_groups_id_fk": {
           "name": "group_house_choices_group_id_groups_id_fk",
           "tableFrom": "group_house_choices",
+          "tableTo": "groups",
           "columnsFrom": [
             "group_id"
           ],
-          "tableTo": "groups",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "group_house_choices_house_id_houses_id_fk": {
           "name": "group_house_choices_house_id_houses_id_fk",
           "tableFrom": "group_house_choices",
+          "tableTo": "houses",
           "columnsFrom": [
             "house_id"
           ],
-          "tableTo": "houses",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "group_house_choices_group_rank_unique": {
           "name": "group_house_choices_group_rank_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "group_id",
             "rank"
-          ],
-          "nullsNotDistinct": false
+          ]
         },
         "group_house_choices_group_house_unique": {
           "name": "group_house_choices_group_house_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "group_id",
             "house_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -869,38 +867,38 @@
         "groups_leader_id_students_id_fk": {
           "name": "groups_leader_id_students_id_fk",
           "tableFrom": "groups",
+          "tableTo": "students",
           "columnsFrom": [
             "leader_id"
           ],
-          "tableTo": "students",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "groups_assigned_house_id_houses_id_fk": {
           "name": "groups_assigned_house_id_houses_id_fk",
           "tableFrom": "groups",
+          "tableTo": "houses",
           "columnsFrom": [
             "assigned_house_id"
           ],
-          "tableTo": "houses",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "groups_join_code_unique": {
           "name": "groups_join_code_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "join_code"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -957,10 +955,10 @@
       "uniqueConstraints": {
         "houses_code_unique": {
           "name": "houses_code_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "code"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -969,43 +967,12 @@
     }
   },
   "enums": {
-    "public.travel_destination": {
-      "name": "travel_destination",
-      "schema": "public",
-      "values": [
-        "ratchathewi",
-        "watthana",
-        "khlong_toei",
-        "sathon",
-        "bang_rak",
-        "phaya_thai",
-        "din_daeng",
-        "huai_khwang",
-        "other",
-        "chula"
-      ]
-    },
     "public.game": {
       "name": "game",
       "schema": "public",
       "values": [
         "jigsaw",
         "csr"
-      ]
-    },
-    "public.travel_origin": {
-      "name": "travel_origin",
-      "schema": "public",
-      "values": [
-        "ratchathewi",
-        "watthana",
-        "khlong_toei",
-        "sathon",
-        "bang_rak",
-        "phaya_thai",
-        "din_daeng",
-        "huai_khwang",
-        "other"
       ]
     },
     "public.project": {
@@ -1040,10 +1007,10 @@
     }
   },
   "schemas": {},
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},
