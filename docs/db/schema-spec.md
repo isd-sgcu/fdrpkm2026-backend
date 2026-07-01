@@ -45,6 +45,7 @@ students
   emergency_contact_name, emergency_contact_phone
   allergies, dietary, medical_notes
   role          'student' | 'staff'  -- staff register same as students
+  cno_sgcu_awareness  text (nullable)  -- survey: familiarity with SGCU; answer code, frontend-owned
   created_at, updated_at
 ```
 
@@ -60,6 +61,7 @@ registrations
   pdpa_accepted_at timestamptz
   attended_days    int (nullable; RPKM carbon form — how many days attended)
   group_id         fk → groups (nullable; RPKM rows only — the student's one group)
+  cno_referral_source  text (nullable)  -- survey: publicity channel seen; answer code, frontend-owned
   created_at
   unique(student_id, project)
 ```

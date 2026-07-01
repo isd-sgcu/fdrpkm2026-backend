@@ -9,6 +9,7 @@ CREATE TABLE "registrations" (
 	"pdpa_accepted_at" timestamp with time zone NOT NULL,
 	"attended_days" integer,
 	"group_id" uuid,
+	"cno_referral_source" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "registrations_student_project_unique" UNIQUE("student_id","project")
@@ -32,6 +33,7 @@ CREATE TABLE "students" (
 	"dietary" text,
 	"medical_notes" text,
 	"role" "role" DEFAULT 'student' NOT NULL,
+	"cno_sgcu_awareness" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "students_student_id_unique" UNIQUE("student_id")

@@ -28,6 +28,8 @@ export const students = t.pgTable(
     dietary: t.text("dietary"),
     medicalNotes: t.text("medical_notes"),
     role: roleEnum("role").notNull().default("student"),
+    // survey: how familiar the นิสิต is with SGCU. answer code is free text, frontend-owned.
+    cnoSgcuAwareness: t.text("cno_sgcu_awareness"),
     ...timestamps
   },
   (table) => [t.uniqueIndex("students_email_unique").on(sql`lower(${table.email})`)]
@@ -47,6 +49,8 @@ export const registrations = t.pgTable(
     pdpaAcceptedAt: t.timestamp("pdpa_accepted_at", { withTimezone: true }).notNull(),
     attendedDays: t.integer("attended_days"),
     groupId: t.uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
+    // survey: which channel the publicity was seen through. answer code is free text, frontend-owned.
+    cnoReferralSource: t.text("cno_referral_source"),
     ...timestamps
   },
   (table) => [

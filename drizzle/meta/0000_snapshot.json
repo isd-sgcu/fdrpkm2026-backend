@@ -1,5 +1,5 @@
 {
-  "id": "9ca3aa85-75f5-4ce1-9fa5-36500ba6739c",
+  "id": "053a3095-70de-43cd-a310-236e9d9e8cea",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -43,6 +43,12 @@
         "group_id": {
           "name": "group_id",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cno_referral_source": {
+          "name": "cno_referral_source",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -229,6 +235,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'student'"
+        },
+        "cno_sgcu_awareness": {
+          "name": "cno_sgcu_awareness",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
