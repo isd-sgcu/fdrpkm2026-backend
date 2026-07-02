@@ -137,8 +137,10 @@ describe("travel_legs", () => {
     registrationId,
     seq: seqNo,
     vehicle: "bus",
-    origin: "watthana",
-    destination: "chula"
+    originDistrict: "watthana",
+    originProvince: "bangkok",
+    destinationDistrict: "pathumwan",
+    destinationProvince: "bangkok"
   });
 
   it("accepts legs 1 and 2", async () => {
@@ -298,7 +300,7 @@ describe("updated_at trigger", () => {
   });
 });
 
-describe("travel_legs *_other consistency", () => {
+describe("travel_legs vehicle_other consistency", () => {
   async function makeRegistration(): Promise<string> {
     const student = await makeStudent();
     const [reg] = await db
@@ -315,8 +317,10 @@ describe("travel_legs *_other consistency", () => {
         registrationId,
         seq: 1,
         vehicle: "other",
-        origin: "watthana",
-        destination: "chula"
+        originDistrict: "watthana",
+        originProvince: "bangkok",
+        destinationDistrict: "pathumwan",
+        destinationProvince: "bangkok"
       })
     );
   });
@@ -329,8 +333,10 @@ describe("travel_legs *_other consistency", () => {
         seq: 1,
         vehicle: "bus",
         vehicleOther: "ขยะ",
-        origin: "watthana",
-        destination: "chula"
+        originDistrict: "watthana",
+        originProvince: "bangkok",
+        destinationDistrict: "pathumwan",
+        destinationProvince: "bangkok"
       })
     );
   });
@@ -344,8 +350,10 @@ describe("travel_legs *_other consistency", () => {
         seq: 1,
         vehicle: "other",
         vehicleOther: "Songthaew",
-        origin: "watthana",
-        destination: "chula"
+        originDistrict: "watthana",
+        originProvince: "bangkok",
+        destinationDistrict: "pathumwan",
+        destinationProvince: "bangkok"
       })
       .returning();
     expect(rows).toHaveLength(1);

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
 
-import { projectEnum, roleEnum, vehicleEnum } from "./enums";
+import { prefixEnum, projectEnum, roleEnum, vehicleEnum } from "./enums";
 import { id, timestamps } from "./helper";
 import { groups } from "./houses.schema";
 
@@ -14,6 +14,8 @@ export const students = t.pgTable(
     studentId: t.text("student_id").notNull().unique(),
     // case-insensitive unique (see config below) — "A@x.com" and "a@x.com" are the same person.
     email: t.text("email").notNull(),
+    // defaulted so the SSO upsert works before the form is filled.
+    prefix: prefixEnum("prefix").notNull().default("not_specified"),
     firstName: t.text("first_name").notNull(),
     lastName: t.text("last_name").notNull(),
     nickname: t.text("nickname"),
@@ -28,8 +30,8 @@ export const students = t.pgTable(
     dietary: t.text("dietary"),
     medicalNotes: t.text("medical_notes"),
     role: roleEnum("role").notNull().default("student"),
-    // survey: how familiar the นิสิต is with SGCU. answer code is free text, frontend-owned.
-    cnoSgcuAwareness: t.text("cno_sgcu_awareness"),
+    // P&O survey: SGCU awareness. frontend sends the answer code.
+    pnoSgcuAwareness: t.text("pno_sgcu_awareness"),
     ...timestamps
   },
   (table) => [t.uniqueIndex("students_email_unique").on(sql`lower(${table.email})`)]
@@ -49,8 +51,8 @@ export const registrations = t.pgTable(
     pdpaAcceptedAt: t.timestamp("pdpa_accepted_at", { withTimezone: true }).notNull(),
     attendedDays: t.integer("attended_days"),
     groupId: t.uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
-    // survey: which channel the publicity was seen through. answer code is free text, frontend-owned.
-    cnoReferralSource: t.text("cno_referral_source"),
+    // P&O survey: where they saw the publicity. frontend sends the answer code.
+    pnoReferralSource: t.text("pno_referral_source"),
     ...timestamps
   },
   (table) => [
@@ -59,8 +61,8 @@ export const registrations = t.pgTable(
   ]
 );
 
-// carbon: up to 2 legs per registration. each field is a code + a *_other free text for "อื่นๆ".
-// the form's "ท่านเดินทางมาจากเขตใด" = leg 1's origin. no distance stored — choices only.
+// carbon: up to 2 legs per registration. no distance stored, just the choices.
+// top-of-form origin question maps to leg 1's origin_district.
 export const travelLegs = t.pgTable(
   "travel_legs",
   {
@@ -72,29 +74,21 @@ export const travelLegs = t.pgTable(
     seq: t.integer("seq").notNull(),
     vehicle: vehicleEnum("vehicle").notNull(),
     vehicleOther: t.text("vehicle_other"),
-    // district codes are free text — not validated in the backend (frontend sends them).
-    origin: t.text("origin").notNull(),
-    originOther: t.text("origin_other"),
-    destination: t.text("destination").notNull(),
-    destinationOther: t.text("destination_other"),
+    // free text, not validated here. frontend sends district + province.
+    originDistrict: t.text("origin_district").notNull(),
+    originProvince: t.text("origin_province").notNull(),
+    destinationDistrict: t.text("destination_district").notNull(),
+    destinationProvince: t.text("destination_province").notNull(),
     ...timestamps
   },
   (table) => [
     t.unique("travel_legs_registration_seq_unique").on(table.registrationId, table.seq),
     t.index("travel_legs_registration_id_idx").on(table.registrationId),
     t.check("travel_legs_seq_check", sql`${table.seq} in (1, 2)`),
-    // *_other free-text is required iff the code is 'other', and forbidden otherwise.
+    // vehicle_other required iff vehicle = 'other'.
     t.check(
       "travel_legs_vehicle_other_check",
       sql`(${table.vehicle} = 'other') = (${table.vehicleOther} is not null)`
-    ),
-    t.check(
-      "travel_legs_origin_other_check",
-      sql`(${table.origin} = 'other') = (${table.originOther} is not null)`
-    ),
-    t.check(
-      "travel_legs_destination_other_check",
-      sql`(${table.destination} = 'other') = (${table.destinationOther} is not null)`
     )
   ]
 );

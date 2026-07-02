@@ -3,6 +3,9 @@ import { pgEnum } from "drizzle-orm/pg-core";
 export const projectEnum = pgEnum("project", ["firstdate", "rpkm"]);
 export const roleEnum = pgEnum("role", ["student", "staff"]);
 
+// name title. no _other column for "other".
+export const prefixEnum = pgEnum("prefix", ["mr", "mrs", "ms", "not_specified", "other"]);
+
 // label that tells the two stamp games apart (checkpoints.game) — not an FK.
 export const gameEnum = pgEnum("game", ["jigsaw", "csr"]);
 
@@ -18,5 +21,4 @@ export const vehicleEnum = pgEnum("vehicle", [
   "other"
 ]);
 
-// Districts (origin/destination) are NOT validated in the backend — the frontend sends the
-// district code as free text. The matching *_other free text still applies when the code is "other".
+// origin/destination are free text (district + province), not validated here. no _other columns.

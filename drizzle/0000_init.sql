@@ -1,4 +1,5 @@
 CREATE TYPE "public"."game" AS ENUM('jigsaw', 'csr');--> statement-breakpoint
+CREATE TYPE "public"."prefix" AS ENUM('mr', 'mrs', 'ms', 'not_specified', 'other');--> statement-breakpoint
 CREATE TYPE "public"."project" AS ENUM('firstdate', 'rpkm');--> statement-breakpoint
 CREATE TYPE "public"."role" AS ENUM('student', 'staff');--> statement-breakpoint
 CREATE TYPE "public"."vehicle" AS ENUM('private_car', 'private_ev', 'transit', 'bus', 'taxi', 'motorcycle', 'bike_walk', 'other');--> statement-breakpoint
@@ -9,7 +10,7 @@ CREATE TABLE "registrations" (
 	"pdpa_accepted_at" timestamp with time zone NOT NULL,
 	"attended_days" integer,
 	"group_id" uuid,
-	"cno_referral_source" text,
+	"pno_referral_source" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "registrations_student_project_unique" UNIQUE("student_id","project")
@@ -19,6 +20,7 @@ CREATE TABLE "students" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"student_id" text NOT NULL,
 	"email" text NOT NULL,
+	"prefix" "prefix" DEFAULT 'not_specified' NOT NULL,
 	"first_name" text NOT NULL,
 	"last_name" text NOT NULL,
 	"nickname" text,
@@ -33,7 +35,7 @@ CREATE TABLE "students" (
 	"dietary" text,
 	"medical_notes" text,
 	"role" "role" DEFAULT 'student' NOT NULL,
-	"cno_sgcu_awareness" text,
+	"pno_sgcu_awareness" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "students_student_id_unique" UNIQUE("student_id")
@@ -45,17 +47,15 @@ CREATE TABLE "travel_legs" (
 	"seq" integer NOT NULL,
 	"vehicle" "vehicle" NOT NULL,
 	"vehicle_other" text,
-	"origin" text NOT NULL,
-	"origin_other" text,
-	"destination" text NOT NULL,
-	"destination_other" text,
+	"origin_district" text NOT NULL,
+	"origin_province" text NOT NULL,
+	"destination_district" text NOT NULL,
+	"destination_province" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "travel_legs_registration_seq_unique" UNIQUE("registration_id","seq"),
 	CONSTRAINT "travel_legs_seq_check" CHECK ("travel_legs"."seq" in (1, 2)),
-	CONSTRAINT "travel_legs_vehicle_other_check" CHECK (("travel_legs"."vehicle" = 'other') = ("travel_legs"."vehicle_other" is not null)),
-	CONSTRAINT "travel_legs_origin_other_check" CHECK (("travel_legs"."origin" = 'other') = ("travel_legs"."origin_other" is not null)),
-	CONSTRAINT "travel_legs_destination_other_check" CHECK (("travel_legs"."destination" = 'other') = ("travel_legs"."destination_other" is not null))
+	CONSTRAINT "travel_legs_vehicle_other_check" CHECK (("travel_legs"."vehicle" = 'other') = ("travel_legs"."vehicle_other" is not null))
 );
 --> statement-breakpoint
 CREATE TABLE "fd_entries" (

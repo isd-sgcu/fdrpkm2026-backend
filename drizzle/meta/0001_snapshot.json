@@ -1,6 +1,6 @@
 {
-  "id": "60a8199c-d5a1-40ba-84d0-eeb60f16207c",
-  "prevId": "053a3095-70de-43cd-a310-236e9d9e8cea",
+  "id": "78990077-8e04-42d0-9b88-173c1fb5360a",
+  "prevId": "d9e8a8b0-730e-407e-916b-c668505f132e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -46,8 +46,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "cno_referral_source": {
-          "name": "cno_referral_source",
+        "pno_referral_source": {
+          "name": "pno_referral_source",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -150,6 +150,14 @@
           "primaryKey": false,
           "notNull": true
         },
+        "prefix": {
+          "name": "prefix",
+          "type": "prefix",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'not_specified'"
+        },
         "first_name": {
           "name": "first_name",
           "type": "text",
@@ -236,8 +244,8 @@
           "notNull": true,
           "default": "'student'"
         },
-        "cno_sgcu_awareness": {
-          "name": "cno_sgcu_awareness",
+        "pno_sgcu_awareness": {
+          "name": "pno_sgcu_awareness",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -325,29 +333,29 @@
           "primaryKey": false,
           "notNull": false
         },
-        "origin": {
-          "name": "origin",
+        "origin_district": {
+          "name": "origin_district",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "origin_other": {
-          "name": "origin_other",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "destination": {
-          "name": "destination",
+        "origin_province": {
+          "name": "origin_province",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "destination_other": {
-          "name": "destination_other",
+        "destination_district": {
+          "name": "destination_district",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
+        },
+        "destination_province": {
+          "name": "destination_province",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",
@@ -416,14 +424,6 @@
         "travel_legs_vehicle_other_check": {
           "name": "travel_legs_vehicle_other_check",
           "value": "(\"travel_legs\".\"vehicle\" = 'other') = (\"travel_legs\".\"vehicle_other\" is not null)"
-        },
-        "travel_legs_origin_other_check": {
-          "name": "travel_legs_origin_other_check",
-          "value": "(\"travel_legs\".\"origin\" = 'other') = (\"travel_legs\".\"origin_other\" is not null)"
-        },
-        "travel_legs_destination_other_check": {
-          "name": "travel_legs_destination_other_check",
-          "value": "(\"travel_legs\".\"destination\" = 'other') = (\"travel_legs\".\"destination_other\" is not null)"
         }
       },
       "isRLSEnabled": false
@@ -985,6 +985,17 @@
       "values": [
         "jigsaw",
         "csr"
+      ]
+    },
+    "public.prefix": {
+      "name": "prefix",
+      "schema": "public",
+      "values": [
+        "mr",
+        "mrs",
+        "ms",
+        "not_specified",
+        "other"
       ]
     },
     "public.project": {

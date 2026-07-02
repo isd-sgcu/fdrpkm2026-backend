@@ -38,6 +38,7 @@ students
   id            pk
   student_id    text unique          -- CUNET id, also the QR payload
   email         text unique          -- from Chula SSO
+  prefix        'mr'|'mrs'|'ms'|'not_specified'|'other'  -- คำนำหน้าชื่อ; NOT NULL default 'not_specified'
   first_name, last_name, nickname    -- single language; names aren't translated
   faculty, department, year
   -- year-one is derived: student_id starts with '69' (cohort 2569). No stored column.
@@ -45,7 +46,7 @@ students
   emergency_contact_name, emergency_contact_phone
   allergies, dietary, medical_notes
   role          'student' | 'staff'  -- staff register same as students
-  cno_sgcu_awareness  text (nullable)  -- survey: familiarity with SGCU; answer code, frontend-owned
+  pno_sgcu_awareness  text (nullable)  -- survey (P&O): familiarity with SGCU; answer code, frontend-owned
   created_at, updated_at
 ```
 
@@ -61,7 +62,7 @@ registrations
   pdpa_accepted_at timestamptz
   attended_days    int (nullable; RPKM carbon form — how many days attended)
   group_id         fk → groups (nullable; RPKM rows only — the student's one group)
-  cno_referral_source  text (nullable)  -- survey: publicity channel seen; answer code, frontend-owned
+  pno_referral_source  text (nullable)  -- survey (P&O): publicity channel seen; answer code, frontend-owned
   created_at
   unique(student_id, project)
 ```
@@ -73,21 +74,21 @@ travel_legs
   id                pk
   registration_id   fk → registrations
   seq               int      -- 1 or 2; CHECK (seq in (1,2))
-  vehicle           text     -- enum (8 below); 'other' → vehicle_other
-  vehicle_other     text null
-  origin            text     -- free-text district code (not validated); 'other' → origin_other
-  origin_other      text null
-  destination       text     -- free-text ('chula' | district code, not validated); 'other' → destination_other
-  destination_other text null
+  vehicle              text  -- enum (8 below); 'other' → vehicle_other
+  vehicle_other        text null
+  origin_district      text  -- free text (not validated; frontend sends it)
+  origin_province      text  -- free text
+  destination_district text  -- free text
+  destination_province text  -- free text
   unique(registration_id, seq)             -- no two leg-1s for one registration
 ```
 
-Each fixed-list field = a code (label in i18n) + a nullable `*_other` free-text for "อื่นๆ โปรดระบุ". No distance/km — store choices only; carbon computed downstream.
+`vehicle` = a code (label in i18n) + a nullable `vehicle_other` for "อื่นๆ โปรดระบุ". Origin/destination are each split into free-text `*_district` + `*_province` (no `*_other`). No distance/km — store choices only; carbon computed downstream.
 
 **vehicle** (TH/EN labels in i18n): `private_car`, `private_ev`, `transit` (BTS/MRT/ARL), `bus`, `taxi`, `motorcycle`, `bike_walk`, `other`.
-**district** (`origin` + `destination`): stored as **free text — not validated in the backend**. The frontend owns the district code set; `other` → matching `*_other`, and `destination` also carries `chula`.
+**origin/destination**: each split into `*_district` + `*_province`, stored as **free text — not validated in the backend** (the frontend owns the values). No `*_other`.
 
-> "ท่านเดินทางมาจากเขตใด" (top of form) = leg 1's `origin`; not stored separately.
+> "ท่านเดินทางมาจากเขตใด" (top of form) = leg 1's `origin_district`; not stored separately.
 > RPKM and FD carbon forms differ (FD = 1-day, simpler). Same `travel_legs` shape serves both; `attended_days` is RPKM-only.
 
 ### Activity gating = app config (NOT a table)
@@ -195,7 +196,7 @@ group_house_choices
 
 **Identity key.** Upsert `students` on `student_id` (immutable from CUNET). `email` also `unique` but is the weaker key — don't conflict-target it.
 
-**Enums** (Drizzle `pgEnum`, or `text` + `CHECK`): `registrations.project`, `students.role`, `checkpoints.game`, `travel_legs.vehicle`. Catches typos at write time; cheap to extend. `travel_legs.origin`/`destination` are deliberately **plain `text`** — district codes are validated by the frontend, not the DB.
+**Enums** (Drizzle `pgEnum`, or `text` + `CHECK`): `registrations.project`, `students.role`, `students.prefix`, `checkpoints.game`, `travel_legs.vehicle`. Catches typos at write time; cheap to extend. `travel_legs.origin_district`/`origin_province`/`destination_district`/`destination_province` are deliberately **plain `text`** — validated by the frontend, not the DB.
 
 **CHECK constraints:** `travel_legs.seq IN (1,2)`, `group_house_choices.rank BETWEEN 1 AND 5`.
 
