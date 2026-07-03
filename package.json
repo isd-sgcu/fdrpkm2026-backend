@@ -27,6 +27,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@better-auth/i18n": "^1.6.23",
     "@elysiajs/cors": "^1.4.2",
     "@elysiajs/openapi": "^1.4.15",
     "better-auth": "^1.6.23",
