@@ -8,7 +8,8 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./src/db/schema/index.ts",
   out: "./drizzle",
+  driver: "pglite",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? ""
+    url: `file:${process.env.DATABASE_FILE}`
   }
 });
