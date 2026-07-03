@@ -4,9 +4,12 @@ import { authRoutes } from "./auth";
 import { firstdateRoutes } from "./firstdate";
 import { healthRoutes } from "./health";
 import { rpkmRoutes } from "./rpkm";
+import { exampleRoutes } from "./example";
 
-export const apiRoutes = new Elysia({ prefix: "/api/v1" })
-  // .use()
+const isDev = process.env.NODE_ENV === "development";
+
+export const apiRoutes = new Elysia({ prefix: "/v1" })
+  .use(isDev ? exampleRoutes : new Elysia())
   .use(healthRoutes)
   .use(authRoutes)
   .use(firstdateRoutes)
