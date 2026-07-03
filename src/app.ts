@@ -2,8 +2,8 @@ import { cors } from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 
-import { env } from "./config/env";
-import { apiRoutes } from "./routes";
+import { env } from "@src/config/env";
+import { apiRoutes } from "@src/routes";
 
 export const createApp = () =>
   new Elysia()
