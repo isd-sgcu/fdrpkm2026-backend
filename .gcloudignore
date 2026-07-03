@@ -11,3 +11,6 @@ coverage
 
 .codex
 .agents
+
+
+*.db

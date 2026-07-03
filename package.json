@@ -23,14 +23,16 @@
   "dependencies": {
     "@elysiajs/cors": "^1.4.2",
     "@elysiajs/openapi": "^1.4.15",
-    "drizzle-orm": "^0.45.2",
-    "elysia": "^1.4.29"
+    "drizzle-orm": "^1.0.0-rc.4",
+    "elysia": "^1.4.29",
+    "pg": "^8.22.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.3",
+    "@electric-sql/pglite": "^0.5.4",
     "@eslint/js": "^10.0.1",
     "@types/bun": "^1.3.14",
-    "drizzle-kit": "^0.31.10",
+    "@types/pg": "^8.20.0",
+    "drizzle-kit": "^1.0.0-rc.4",
     "eslint": "^10.6.0",
     "prettier": "^3.9.3",
     "typescript": "^6.0.3",

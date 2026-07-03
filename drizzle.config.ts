@@ -1,7 +1,9 @@
 import { defineConfig } from "drizzle-kit";
 
-// `generate` needs only schema + dialect + out. `migrate`/`push`/`studio`
-// additionally need DATABASE_URL (set it in .env when the DB exists).
+if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
+  throw new Error("drizzle-kit should only be run in development or test environments");
+}
+
 export default defineConfig({
   dialect: "postgresql",
   schema: "./src/db/schema/index.ts",

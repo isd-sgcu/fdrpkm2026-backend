@@ -19,10 +19,12 @@ export const authRoutes = new Elysia({ prefix: "/auth" })
   // build the CAS login redirect; service/return URL = this host's callback
   .get("/login", ({ request }) => {
     const host = request.headers.get("host") ?? undefined;
-    const project = projectFromHost(host);
+    projectFromHost(host);
     const returnUrl = `https://${host}/api/v1/auth/callback`;
-    // TODO: redirect to ChulaSSO with service=returnUrl
-    return { project, returnUrl, todo: "redirect to ChulaSSO with this service URL" };
+    const loginUrl = new URL("https://account.it.chula.ac.th/login");
+    loginUrl.searchParams.set("service", returnUrl);
+
+    return Response.redirect(loginUrl.toString());
   })
   // CAS redirects back here on the same host -> project known from Host
   .get("/callback", ({ request }) => {

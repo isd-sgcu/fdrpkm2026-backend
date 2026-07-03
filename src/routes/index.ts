@@ -6,6 +6,7 @@ import { healthRoutes } from "./health";
 import { rpkmRoutes } from "./rpkm";
 
 export const apiRoutes = new Elysia({ prefix: "/api/v1" })
+  // .use()
   .use(healthRoutes)
   .use(authRoutes)
   .use(firstdateRoutes)
