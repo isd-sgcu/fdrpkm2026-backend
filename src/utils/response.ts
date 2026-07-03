@@ -11,19 +11,21 @@ export function successResponse<T extends Record<string, unknown>>(data: T) {
 /**
  * Generates a standardized error response object for API responses.
  * @param code {@link AppErrorCode} enum value, e.g. "NOT_FOUND"
- * @param data optional additional data to include in the error response
+ * @param context optional additional data to include in the error response —
+ *   must match the shape passed to {@link tErrorResponse}'s `context` schema
+ *   for the same route, or Elysia will reject the response in dev.
  * @returns JSON object for use in API responses
  * @example
  *   return status(404, errorResponse(AppErrorCode.NOT_FOUND, { message: "Resource not found" }));
  *   // or
  *   return status(404, errorResponse("NOT_FOUND", { message: "Resource not found" }));
  */
-export function errorResponse<T extends AppErrorCode>(code: T, data?: Record<string, unknown>) {
+export function errorResponse<T extends AppErrorCode>(code: T, context?: Record<string, unknown>) {
   return {
     success: false as const,
     error: {
       code,
-      data
+      context
     }
   };
 }
