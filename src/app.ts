@@ -4,6 +4,7 @@ import { Elysia } from "elysia";
 
 import { env } from "@src/config";
 import { apiRoutes } from "@src/routes";
+import { authMiddleware } from "@src/routes/auth";
 
 export const createApp = () =>
   new Elysia()
@@ -25,4 +26,6 @@ export const createApp = () =>
       name: "fdrpkm2026-backend",
       version: "0.1.0"
     }))
+    .use(authMiddleware)
+    .as("global")
     .use(apiRoutes);
