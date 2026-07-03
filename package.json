@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "author": {
+    "email": "isd@sgcu.in.th",
+    "name": "Information System Development Team, SGCU",
+    "url": "https://isd.sgcu.in.th"
+  },
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "build": "bun build src/index.ts --target=bun --outdir=dist",
