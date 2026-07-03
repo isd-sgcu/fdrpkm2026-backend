@@ -7,12 +7,14 @@ import { AppErrorCode, errorResponse, tErrorResponse } from "@src/utils";
  */
 export const firstdateRoutes = new Elysia({ prefix: "/firstdate" })
   // EXAMPLE only dont forget to remove in prod na
-  .decorate("auth", () => (Math.random() > 0.5 ? { userId: "123" } : null))
+  .decorate("auth", Math.random() > 0.5 ? { userId: "123" } : null)
   .get(
     "/",
     ({ auth, status }) => {
       if (!auth)
         return status(401, errorResponse(AppErrorCode.UNAUTHORIZED, { message: "Unauthorized" }));
+
+      return { name: "John Doe" };
     },
     {
       response: {
@@ -22,7 +24,7 @@ export const firstdateRoutes = new Elysia({ prefix: "/firstdate" })
             example: ["John Doe", "Jane Doe"]
           })
         }),
-        401: tErrorResponse("UNAUTHORIZED", { message: "Unauthorized" })
+        401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() }))
       }
     }
   );
