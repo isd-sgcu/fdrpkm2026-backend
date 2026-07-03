@@ -11,6 +11,7 @@ Table students {
   id uuid [pk, default: `gen_random_uuid()`]
   student_id varchar [unique, note: 'CUNET id. QR payload. prefix 69 means year one']
   email varchar [unique, note: 'from Chula SSO']
+  prefix varchar [not null, default: 'not_specified', note: 'title: mr mrs ms not_specified other']
   first_name varchar
   last_name varchar
   nickname varchar
@@ -25,6 +26,7 @@ Table students {
   dietary text
   medical_notes text
   role varchar [note: 'student or staff']
+  pno_sgcu_awareness varchar [null, note: 'survey (P&O): SGCU familiarity; free-text code']
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 }
@@ -36,6 +38,7 @@ Table registrations {
   pdpa_accepted_at timestamptz
   attended_days int [null, note: 'RPKM carbon days attended']
   group_id uuid [ref: > groups.id, null, note: 'RPKM only. SET NULL on group delete']
+  pno_referral_source varchar [null, note: 'survey (P&O): publicity channel; free-text code']
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 
@@ -51,10 +54,10 @@ Table travel_legs {
   seq int [note: '1 or 2. CHECK in 1 2']
   vehicle varchar [note: 'private_car private_ev transit bus taxi motorcycle bike_walk other']
   vehicle_other varchar [null]
-  origin varchar [note: 'district code or other']
-  origin_other varchar [null]
-  destination varchar [note: 'chula or district code or other']
-  destination_other varchar [null]
+  origin_district varchar [note: 'free text (not validated)']
+  origin_province varchar [note: 'free text']
+  destination_district varchar [note: 'free text']
+  destination_province varchar [note: 'free text']
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 

@@ -6,35 +6,39 @@
 
 ## Core decisions
 
-| Decision | Choice | Why |
-|---|---|---|
-| Project separation | Shared tables, `project` tag where they differ | Data near-identical; one migration set |
-| Identity | One shared `students` (person) record per SSO identity | Register once; prefill the other project |
-| Per-project data | `registrations` row per (student, project) | Carbon/travel/PDPA asked per project |
-| Bilingual | i18n files keyed by `code`; **no** lang columns in DB | Content set fixed (22 houses, games). Tradeoff: copy edit = deploy |
-| Carbon | Store ordered travel **legs** (method only), **no** computation | Trip = multiple legs; team hands off raw, computes downstream |
-| Activity gating | Hardcoded app **config**, not a DB table | Dates/flags are fixed; ~6 features. Change = redeploy, acceptable |
-| QR | Static QR per point + server-side validation | Window + dedupe + **GPS gate (config toggle)** |
-| QR security | No rotating/TOTP QR | GPS gate from `GAMES[game].requireGps` config; GPS via browser `navigator.geolocation` |
-| House groups | Group-level; everyone always in exactly one group; join via 6-digit code | No explicit create; auto solo group at registration |
+| Decision           | Choice                                                                   | Why                                                                                    |
+| ------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Project separation | Shared tables, `project` tag where they differ                           | Data near-identical; one migration set                                                 |
+| Identity           | One shared `students` (person) record per SSO identity                   | Register once; prefill the other project                                               |
+| Per-project data   | `registrations` row per (student, project)                               | Carbon/travel/PDPA asked per project                                                   |
+| Bilingual          | i18n files keyed by `code`; **no** lang columns in DB                    | Content set fixed (22 houses, games). Tradeoff: copy edit = deploy                     |
+| Carbon             | Store ordered travel **legs** (method only), **no** computation          | Trip = multiple legs; team hands off raw, computes downstream                          |
+| Activity gating    | Hardcoded app **config**, not a DB table                                 | Dates/flags are fixed; ~6 features. Change = redeploy, acceptable                      |
+| QR                 | Static QR per point + server-side validation                             | Window + dedupe + **GPS gate (config toggle)**                                         |
+| QR security        | No rotating/TOTP QR                                                      | GPS gate from `GAMES[game].requireGps` config; GPS via browser `navigator.geolocation` |
+| House groups       | Group-level; everyone always in exactly one group; join via 6-digit code | No explicit create; auto solo group at registration                                    |
 
 ### Prefill UX
+
 On RPKM entry: SSO → look up `students` by `student_id`. Row exists → prefill shared fields. Else show form with project-only fields (travel legs, RPKM PDPA, attended_days).
 
 ## Tables
 
 > **Conventions (apply to every table):**
+>
 > - Primary key `id` is `uuid` with `default gen_random_uuid()`. All FKs are `uuid`.
 > - Every table has `created_at` + `updated_at` (`timestamptz`, default `now()`; `updated_at` auto-touched on update).
 > - `student_id` (CUNET, varchar) is the QR payload and the SSO conflict target — **not** the uuid pk.
 > - Per-table blocks below omit `id`/`created_at`/`updated_at` for brevity; they're always present.
 
 ### Identity (shared, asked once)
+
 ```
 students
   id            pk
   student_id    text unique          -- CUNET id, also the QR payload
   email         text unique          -- from Chula SSO
+  prefix        'mr'|'mrs'|'ms'|'not_specified'|'other'  -- คำนำหน้าชื่อ; NOT NULL default 'not_specified'
   first_name, last_name, nickname    -- single language; names aren't translated
   faculty, department, year
   -- year-one is derived: student_id starts with '69' (cohort 2569). No stored column.
@@ -42,11 +46,14 @@ students
   emergency_contact_name, emergency_contact_phone
   allergies, dietary, medical_notes
   role          'student' | 'staff'  -- staff register same as students
+  pno_sgcu_awareness  text (nullable)  -- survey (P&O): familiarity with SGCU; answer code, frontend-owned
   created_at, updated_at
 ```
+
 QR code = `student_id`. No QR table.
 
 ### Per-project enrollment
+
 ```
 registrations
   id               pk
@@ -55,49 +62,56 @@ registrations
   pdpa_accepted_at timestamptz
   attended_days    int (nullable; RPKM carbon form — how many days attended)
   group_id         fk → groups (nullable; RPKM rows only — the student's one group)
+  pno_referral_source  text (nullable)  -- survey (P&O): publicity channel seen; answer code, frontend-owned
   created_at
   unique(student_id, project)
 ```
 
 ### Travel legs (carbon — up to 2 legs per registration)
+
 ```
 travel_legs
   id                pk
   registration_id   fk → registrations
   seq               int      -- 1 or 2; CHECK (seq in (1,2))
-  vehicle           text     -- enum (8 below); 'other' → vehicle_other
-  vehicle_other     text null
-  origin            text     -- district enum; 'other' → origin_other
-  origin_other      text null
-  destination       text     -- 'chula' | district enum; 'other' → destination_other
-  destination_other text null
+  vehicle              text  -- enum (8 below); 'other' → vehicle_other
+  vehicle_other        text null
+  origin_district      text  -- free text (not validated; frontend sends it)
+  origin_province      text  -- free text
+  destination_district text  -- free text
+  destination_province text  -- free text
   unique(registration_id, seq)             -- no two leg-1s for one registration
 ```
-Each fixed-list field = a code (label in i18n) + a nullable `*_other` free-text for "อื่นๆ โปรดระบุ". No distance/km — store choices only; carbon computed downstream.
+
+`vehicle` = a code (label in i18n) + a nullable `vehicle_other` for "อื่นๆ โปรดระบุ". Origin/destination are each split into free-text `*_district` + `*_province` (no `*_other`). No distance/km — store choices only; carbon computed downstream.
 
 **vehicle** (TH/EN labels in i18n): `private_car`, `private_ev`, `transit` (BTS/MRT/ARL), `bus`, `taxi`, `motorcycle`, `bike_walk`, `other`.
-**district** (origin + destination share the set): `ratchathewi`, `watthana`, `khlong_toei`, `sathon`, `bang_rak`, `phaya_thai`, `din_daeng`, `huai_khwang`, `other`; destination also allows `chula`.
+**origin/destination**: each split into `*_district` + `*_province`, stored as **free text — not validated in the backend** (the frontend owns the values). No `*_other`.
 
-> "ท่านเดินทางมาจากเขตใด" (top of form) = leg 1's `origin`; not stored separately.
+> "ท่านเดินทางมาจากเขตใด" (top of form) = leg 1's `origin_district`; not stored separately.
 > RPKM and FD carbon forms differ (FD = 1-day, simpler). Same `travel_legs` shape serves both; `attended_days` is RPKM-only.
 
 ### Activity gating = app config (NOT a table)
+
 Dates/flags are fixed → hardcoded config constant per frontend. Change = redeploy (acceptable; they don't change).
+
 ```ts
 const GAMES = {
-  jigsaw: { open:'2026-07-20', close:'2026-08-03', yearOneOnly:true, requireGps:true },
-  csr:    { open:'2026-07-20', close:'2026-08-07', yearOneOnly:true, requireGps:true },
-}
-const HOUSE_REG = { open:'2026-07-18T00:00+07', close:'2026-07-22' }
+  jigsaw: { open: "2026-07-20", close: "2026-08-03", yearOneOnly: true, requireGps: true },
+  csr: { open: "2026-07-20", close: "2026-08-07", yearOneOnly: true, requireGps: true }
+};
+const HOUSE_REG = { open: "2026-07-18T00:00+07", close: "2026-07-22" };
 const STATIC = {
-  field_trip:      { open:'…', close:'…', formUrl:'…' },
-  my_freshy_story: { open:'…', close:'…', formUrl:'…' },
-}
-const FD_EVENT_VISIBLE = true   // flip false + redeploy after the 18th
+  field_trip: { open: "…", close: "…", formUrl: "…" },
+  my_freshy_story: { open: "…", close: "…", formUrl: "…" }
+};
+const FD_EVENT_VISIBLE = true; // flip false + redeploy after the 18th
 ```
+
 Server reads this to gate scans (window / year-one / gps); frontend reads it to enable/disable buttons. Static pages = frontend pages + config date gate. No DB rows for any of it.
 
 ### FD entries (FirstDate only — single entry scan)
+
 ```
 fd_entries
   id          pk
@@ -106,9 +120,11 @@ fd_entries
   scanned_at  timestamptz default now()
   unique(student_id)                      -- one entry per student
 ```
+
 Staff scans participant QR (or types student_id on scan failure) → insert. Dedupe via unique. FD-only, standalone. (FD home button hide-after-event = `FD_EVENT_VISIBLE` config flag, redeploy.)
 
 ### QR checkpoints + scan log (jigsaw, CSR — multi-point games)
+
 ```
 checkpoints
   id          pk
@@ -125,10 +141,12 @@ scans
   lat, lng     numeric null              -- captured from browser at scan time
   unique(checkpoint_id, student_id)       -- one credit per point
 ```
+
 **Scan validation (server-side):** game window open + dedupe (always; window from `GAMES[checkpoint.game]` config). If `GAMES[game].requireGps`: browser sends lat/lng (`navigator.geolocation`); reject if missing or farther than `checkpoints.geofence_radius_m` from the checkpoint. Flip `requireGps` in config + redeploy to disable. lat/lng always stored.
 **Stats** ("name, student_id, count collected") = `count distinct checkpoint per student` grouped by `checkpoints.game`. No stats table.
 
 ### RPKM houses
+
 ```
 houses
   id       pk
@@ -156,6 +174,7 @@ group_house_choices
 ```
 
 ## House group rules (app-enforced)
+
 **Invariant:** every RPKM student is always in exactly one group. Held by `registrations.group_id` (one RPKM registration per student → exactly one group). No join table.
 
 - **Auto solo group** created at RPKM registration: new `groups` row (`leader_id` = self), set `registrations.group_id`. No explicit "create group" UI.
@@ -177,34 +196,38 @@ group_house_choices
 
 **Identity key.** Upsert `students` on `student_id` (immutable from CUNET). `email` also `unique` but is the weaker key — don't conflict-target it.
 
-**Enums** (Drizzle `pgEnum`, or `text` + `CHECK`): `registrations.project`, `students.role`, `checkpoints.game`, `travel_legs.vehicle`, `travel_legs.origin`, `travel_legs.destination`. Catches typos at write time; cheap to extend.
+**Enums** (Drizzle `pgEnum`, or `text` + `CHECK`): `registrations.project`, `students.role`, `students.prefix`, `checkpoints.game`, `travel_legs.vehicle`. Catches typos at write time; cheap to extend. `travel_legs.origin_district`/`origin_province`/`destination_district`/`destination_province` are deliberately **plain `text`** — validated by the frontend, not the DB.
 
 **CHECK constraints:** `travel_legs.seq IN (1,2)`, `group_house_choices.rank BETWEEN 1 AND 5`.
 
 **FK `ON DELETE`:**
-| FK | rule | why |
-|---|---|---|
-| `travel_legs.registration_id` | CASCADE | legs are owned by the registration |
-| `group_house_choices.group_id` | CASCADE | disband clears the group's picks |
-| `registrations.group_id` | SET NULL | safety; app already moves members off a group before deleting it |
-| everything → `students` / `houses` / `checkpoints` | RESTRICT | never delete people/houses/points mid-event |
+
+| FK                                                 | rule     | why                                                              |
+| -------------------------------------------------- | -------- | ---------------------------------------------------------------- |
+| `travel_legs.registration_id`                      | CASCADE  | legs are owned by the registration                               |
+| `group_house_choices.group_id`                     | CASCADE  | disband clears the group's picks                                 |
+| `registrations.group_id`                           | SET NULL | safety; app already moves members off a group before deleting it |
+| everything → `students` / `houses` / `checkpoints` | RESTRICT | never delete people/houses/points mid-event                      |
 
 **Indexes** (beyond PK + the uniques already declared):
+
 - `registrations(group_id)` — membership lookups (hot).
 - `scans(student_id)` — per-student progress.
 - `group_house_choices(house_id)` — the demand `GROUP BY`.
 - `travel_legs(registration_id)` — fetch a registration's legs.
 
 **Transaction ordering** (RPKM register + auto group, FK cycle-safe):
+
 1. upsert `students`
 2. insert `registrations` (`group_id` null)
 3. insert `groups` (`leader_id` = student)
 4. update `registrations.group_id` = new group
-All in one transaction. Group join/leave/kick/disband also each run in a single transaction with `SELECT … FOR UPDATE` on the affected group.
+   All in one transaction. Group join/leave/kick/disband also each run in a single transaction with `SELECT … FOR UPDATE` on the affected group.
 
 **Timestamps:** `timestamptz` everywhere; `created_at`/`updated_at` default `now()`.
 
 ## User flows
+
 1. **Landing** → two separate websites, each its own landing page (no central project picker). Enter either → Chula SSO login.
 2. **First register on a site** → upsert `students` from SSO (conflict target `student_id`); if no `registrations(student, this_site)`, show this site's registration page (shared fields prefilled **if** the other site was already done, else blank from SSO; ask travel legs + PDPA) → insert `registrations`. On RPKM registration also auto-create solo group (one transaction, see below).
 3. **Cross-over** (registered FD, now on RPKM site) → `students` known by `student_id` → RPKM registration page prefilled, only RPKM-specific fields empty → insert RPKM `registrations`.
@@ -215,16 +238,18 @@ All in one transaction. Group join/leave/kick/disband also each run in a single 
 8. **Admin** → hide FD after 18th (`FD_EVENT_VISIBLE=false`, redeploy); games auto-disable via config `close`; exports via SQL.
 
 ## Windows (from requirements → app config, not DB)
-| feature | window | flags |
-|---|---|---|
-| FD entry (fd_entries) | 18/7 | FD_EVENT_VISIBLE toggles home button |
-| house reg | 18/7 00:00 – 22/7 | — |
-| jigsaw | 20/7 – 3/8 | year-one, 10 checkpoints, requireGps |
-| csr | 20/7 – 7/8 | year-one, ~35 checkpoints, requireGps |
-| field_trip | per calendar | year-one, gg form |
-| my_freshy_story | per calendar | year-one, gg form |
+
+| feature               | window            | flags                                 |
+| --------------------- | ----------------- | ------------------------------------- |
+| FD entry (fd_entries) | 18/7              | FD_EVENT_VISIBLE toggles home button  |
+| house reg             | 18/7 00:00 – 22/7 | —                                     |
+| jigsaw                | 20/7 – 3/8        | year-one, 10 checkpoints, requireGps  |
+| csr                   | 20/7 – 7/8        | year-one, ~35 checkpoints, requireGps |
+| field_trip            | per calendar      | year-one, gg form                     |
+| my_freshy_story       | per calendar      | year-one, gg form                     |
 
 ## Out of scope / skipped (YAGNI)
+
 - **Prize tables** — threshold query on `scans`. Add when prize logic is defined.
 - **Freshmen Night** — uses CUDSON, not our system.
 - **Personality test** — not this year.
@@ -238,6 +263,7 @@ All in one transaction. Group join/leave/kick/disband also each run in a single 
 - **activities table** — dates/flags are fixed → hardcoded app config. `checkpoints.game` replaces the FK.
 
 ## Resolved
+
 - Year-one check = `student_id LIKE '69%'`. Derived everywhere, no column.
 - Freshmen Night = CUDSON, not in scope.
 - GPS gate = on by default, `GAMES[game].requireGps` config toggles it. lat/lng always stored.

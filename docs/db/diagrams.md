@@ -1,7 +1,9 @@
 # FD × RPKM — Diagrams
 
 ## 1. ER diagram (schema)
+
 > All `id`/FK columns are `uuid` (`int` shown only for brevity). Every table also has `created_at` + `updated_at`. See `schema.dbml` for the authoritative version.
+
 ```mermaid
 erDiagram
     students ||--o{ registrations : has
@@ -20,6 +22,7 @@ erDiagram
         int id PK
         text student_id UK "QR payload; 69%% = year one"
         text email UK "from Chula SSO"
+        text prefix "NN default not_specified; mr|mrs|ms|not_specified|other"
         text first_name
         text last_name
         text nickname
@@ -34,6 +37,7 @@ erDiagram
         text dietary
         text medical_notes
         text role "student | staff"
+        text pno_sgcu_awareness "survey (P&O)"
     }
     registrations {
         int id PK
@@ -42,6 +46,7 @@ erDiagram
         timestamptz pdpa_accepted_at
         int attended_days "RPKM carbon"
         int group_id FK "RPKM only; holds membership (1:1)"
+        text pno_referral_source "survey (P&O)"
         unique student_project "uniq(student_id, project)"
     }
     travel_legs {
@@ -50,10 +55,10 @@ erDiagram
         int seq "1 or 2"
         text vehicle "8 types + other"
         text vehicle_other
-        text origin "district + other"
-        text origin_other
-        text destination "chula/district + other"
-        text destination_other
+        text origin_district "free text"
+        text origin_province "free text"
+        text destination_district "free text"
+        text destination_province "free text"
     }
     fd_entries {
         int id PK
@@ -102,6 +107,7 @@ erDiagram
 ```
 
 ## 2. User flow (journey)
+
 ```mermaid
 flowchart TD
     subgraph AUTH [Entry & registration - shared]
@@ -145,9 +151,11 @@ flowchart TD
     classDef fd fill:#ffe0e6,stroke:#cc3355;
     classDef rpkm fill:#e0ecff,stroke:#3355cc;
 ```
+
 > RPKM registration also auto-creates the student's solo group (see state machine §3).
 
 ## 3. Group state machine (one student's group membership)
+
 ```mermaid
 stateDiagram-v2
     [*] --> SoloLeader : RPKM register (auto solo group)
@@ -168,6 +176,7 @@ stateDiagram-v2
 ```
 
 ## RPKM houses timeline
+
 ```mermaid
 flowchart LR
     A[12/7 house data in] --> B[18/7 00:00 register + group opens]
