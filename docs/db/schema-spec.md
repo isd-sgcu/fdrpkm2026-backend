@@ -110,18 +110,19 @@ const FD_EVENT_VISIBLE = true; // flip false + redeploy after the 18th
 
 Server reads this to gate scans (window / year-one / gps); frontend reads it to enable/disable buttons. Static pages = frontend pages + config date gate. No DB rows for any of it.
 
-### FD entries (FirstDate only — single entry scan)
+### Event entries (staff entry scans — all events)
 
 ```
-fd_entries
+entries
   id          pk
   student_id  fk → students              -- the น้อง who entered
   scanned_by  fk → students              -- staff who scanned (or manual-entry staff)
+  event       'firstdate' | 'freshmennight' | 'rpkm'   -- each event scanned separately
   scanned_at  timestamptz default now()
-  unique(student_id)                      -- one entry per student
+  unique(student_id, event)               -- one entry per student per event
 ```
 
-Staff scans participant QR (or types student_id on scan failure) → insert. Dedupe via unique. FD-only, standalone. (FD home button hide-after-event = `FD_EVENT_VISIBLE` config flag, redeploy.)
+Staff scans participant QR (or types student_id on scan failure) → insert. Dedupe via unique. (FD home button hide-after-event = `FD_EVENT_VISIBLE` config flag, redeploy.)
 
 ### QR checkpoints + scan log (jigsaw, CSR — multi-point games)
 
@@ -231,7 +232,7 @@ group_house_choices
 1. **Landing** → two separate websites, each its own landing page (no central project picker). Enter either → Chula SSO login.
 2. **First register on a site** → upsert `students` from SSO (conflict target `student_id`); if no `registrations(student, this_site)`, show this site's registration page (shared fields prefilled **if** the other site was already done, else blank from SSO; ask travel legs + PDPA) → insert `registrations`. On RPKM registration also auto-create solo group (one transaction, see below).
 3. **Cross-over** (registered FD, now on RPKM site) → `students` known by `student_id` → RPKM registration page prefilled, only RPKM-specific fields empty → insert RPKM `registrations`.
-4. **FD day-of (18th)** → participant shows QR (`student_id`); staff scans → `fd_entries`; manual student_id entry as backup.
+4. **Event day-of** → participant shows QR (`student_id`); staff scans → `entries` (event = firstdate | freshmennight | rpkm); manual student_id entry as backup.
 5. **RPKM houses** → list visible always (i18n), register opens 18/7 → solo group exists; join via code / kick / leave / disband per rules (all via `registrations.group_id`); leader sets rank 1–5 → `group_house_choices`; 22/7 close; 23–25/7 batch random → `groups.assigned_house_id`; 26/7 members read assignment.
 6. **RPKM games** → year-one gate (`69%`) + window (config) → scan static QR → `scans` (dedupe + timestamp); progress = my scans / total; stats export grouped by `checkpoints.game`.
 7. **RPKM static** (field_trip, my_freshy_story) → in window (config) → button → `formUrl`; else disabled.
@@ -239,19 +240,19 @@ group_house_choices
 
 ## Windows (from requirements → app config, not DB)
 
-| feature               | window            | flags                                 |
-| --------------------- | ----------------- | ------------------------------------- |
-| FD entry (fd_entries) | 18/7              | FD_EVENT_VISIBLE toggles home button  |
-| house reg             | 18/7 00:00 – 22/7 | —                                     |
-| jigsaw                | 20/7 – 3/8        | year-one, 10 checkpoints, requireGps  |
-| csr                   | 20/7 – 7/8        | year-one, ~35 checkpoints, requireGps |
-| field_trip            | per calendar      | year-one, gg form                     |
-| my_freshy_story       | per calendar      | year-one, gg form                     |
+| feature                     | window            | flags                                 |
+| --------------------------- | ----------------- | ------------------------------------- |
+| event entry scans (entries) | per event         | FD_EVENT_VISIBLE toggles home button  |
+| house reg                   | 18/7 00:00 – 22/7 | —                                     |
+| jigsaw                      | 20/7 – 3/8        | year-one, 10 checkpoints, requireGps  |
+| csr                         | 20/7 – 7/8        | year-one, ~35 checkpoints, requireGps |
+| field_trip                  | per calendar      | year-one, gg form                     |
+| my_freshy_story             | per calendar      | year-one, gg form                     |
 
 ## Out of scope / skipped (YAGNI)
 
 - **Prize tables** — threshold query on `scans`. Add when prize logic is defined.
-- **Freshmen Night** — uses CUDSON, not our system.
+- **Freshmen Night** — entry scan via `entries` (event `freshmennight`, part of RPKM); activities themselves use CUDSON, not our system.
 - **Personality test** — not this year.
 - **Fest registration / capacity / full-check** — not our system anymore. Dropped `activity_signups` + `activities.capacity`.
 - **Carbon computation** — store choice only.

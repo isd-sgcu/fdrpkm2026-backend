@@ -66,16 +66,17 @@ Table travel_legs {
   }
 }
 
-Table fd_entries {
+Table entries {
   id uuid [pk, default: `gen_random_uuid()`]
   student_id uuid [ref: > students.id, note: 'the freshman who entered']
   scanned_by uuid [ref: > students.id, note: 'staff who scanned']
+  event varchar [note: 'firstdate freshmennight or rpkm. CHECK in those three']
   scanned_at timestamptz [note: 'event time of the scan']
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 
   indexes {
-    student_id [unique, note: 'one entry per student. FD only']
+    (student_id, event) [unique, note: 'one entry per student per event']
   }
 }
 
