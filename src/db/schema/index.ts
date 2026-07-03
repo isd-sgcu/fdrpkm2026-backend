@@ -7,3 +7,4 @@ export * from "./firstdate.schema";
 export * from "./games.schema";
 export * from "./houses.schema";
 export * from "./relations";
+export * from "./auth.schema";

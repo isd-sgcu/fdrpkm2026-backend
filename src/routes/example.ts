@@ -7,6 +7,7 @@ import {
   getExampleUser,
   upsertExampleUser
 } from "@src/services/example.service";
+import { authMiddleware } from "@src/routes/auth";
 
 /**
  * Reference implementation for new routes — copy this file's shape when
@@ -29,6 +30,7 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
   // actual auth plugin (see src/routes/auth), never Math.random().
   .decorate("auth", Math.random() > 0.5 ? { user: { userId: "123" } } : { user: null })
   // Apply our model
+  .use(authMiddleware)
   .use(ExampleModel)
   .prefix("model", "Example.")
   .get("/", () => ({ project: "example" }))
@@ -87,6 +89,23 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
         // Error code defined in AppErrorCode enum in src/utils/error.ts
         401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() })),
         403: tErrorResponse("FORBIDDEN", t.Object({ message: t.String() }))
+      }
+    }
+  )
+  // Example protected route with auth macro. The auth macro is available as `ctx.auth` in handlers.
+  .post(
+    "/protected",
+    ({ auth, status }) => {
+      if (!auth.user)
+        return status(401, errorResponse("UNAUTHORIZED", { message: "Login required" }));
+
+      return { message: `Hello ${auth.user.userId}, you are authorized!` };
+    },
+    {
+      // ADD THIS TO ACTIVATE AUTH MACRO IN HANDLER.
+      response: {
+        200: t.Object({ message: t.String() }),
+        401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() }))
       }
     }
   );
