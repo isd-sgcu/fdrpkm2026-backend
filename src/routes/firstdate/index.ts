@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { AppErrorCode, errorResponse, tErrorResponse } from "@src/utils";
+import { errorResponse, tErrorResponse } from "@src/utils";
 
 /**
  * FirstDate-only routes. project context = 'firstdate'.
@@ -12,7 +12,12 @@ export const firstdateRoutes = new Elysia({ prefix: "/firstdate" })
     "/",
     ({ auth, status }) => {
       if (!auth)
-        return status(401, errorResponse(AppErrorCode.UNAUTHORIZED, { message: "Unauthorized" }));
+        return status(
+          401,
+          errorResponse("UNAUTHORIZED", {
+            message: "You are not authorized to access this resource."
+          })
+        );
 
       return { name: "John Doe" };
     },
