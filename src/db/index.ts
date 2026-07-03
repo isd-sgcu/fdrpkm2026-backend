@@ -2,7 +2,7 @@ import { drizzle as drizzlePGlite } from "drizzle-orm/pglite";
 import { drizzle as drizzlePG } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
-import { env } from "../config/env";
+import { env } from "@src/config";
 
 const usePGlite = env.NODE_ENV === "development" && !env.DATABASE_URL;
 
