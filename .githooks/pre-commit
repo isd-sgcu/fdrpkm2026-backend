@@ -41,11 +41,11 @@ if [ "${#existing_files[@]}" -eq 0 ]; then
   exit 0
 fi
 
+if [ "${#lint_files[@]}" -gt 0 ]; then
+  echo "pre-commit: lint:fix staged files..."
+  "$eslint_bin" --fix "${lint_files[@]}"
+fi
+
 echo "pre-commit: formatting staged files..."
 "$prettier_bin" --write --ignore-unknown "${existing_files[@]}"
 git add -- "${existing_files[@]}"
-
-if [ "${#lint_files[@]}" -gt 0 ]; then
-  echo "pre-commit: linting staged files..."
-  "$eslint_bin" "${lint_files[@]}"
-fi
