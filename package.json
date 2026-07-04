@@ -31,9 +31,12 @@
     "@better-auth/i18n": "^1.6.23",
     "@elysiajs/cors": "^1.4.2",
     "@elysiajs/openapi": "^1.4.15",
+    "@typescript-eslint/eslint-plugin": "^8.62.1",
+    "@typescript-eslint/parser": "^8.62.1",
     "better-auth": "^1.6.23",
     "drizzle-orm": "0.45.2",
     "elysia": "^1.4.29",
+    "eslint-plugin-drizzle": "^0.2.3",
     "pg": "^8.22.0"
   },
   "devDependencies": {
