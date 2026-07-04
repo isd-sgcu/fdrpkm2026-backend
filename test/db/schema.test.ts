@@ -15,7 +15,7 @@ const TABLES = [
   "students",
   "registrations",
   "travel_legs",
-  "fd_entries",
+  "entries",
   "checkpoints",
   "scans",
   "houses",
@@ -254,13 +254,21 @@ describe("group_house_choices", () => {
 });
 
 describe("scan tables", () => {
-  it("fd_entries: one entry per student", async () => {
+  it("entries: one entry per (project, student)", async () => {
     const nong = await makeStudent();
     const staff = await makeStudent({ role: "staff" });
-    await db.insert(schema.fdEntries).values({ studentId: nong.id, scannedBy: staff.id });
+    await db
+      .insert(schema.entries)
+      .values({ project: "firstdate", studentId: nong.id, scannedBy: staff.id });
     await rejects(() =>
-      db.insert(schema.fdEntries).values({ studentId: nong.id, scannedBy: staff.id })
+      db
+        .insert(schema.entries)
+        .values({ project: "firstdate", studentId: nong.id, scannedBy: staff.id })
     );
+    // same student, other project is fine
+    await db
+      .insert(schema.entries)
+      .values({ project: "rpkm", studentId: nong.id, scannedBy: staff.id });
   });
 
   it("scans: one credit per (checkpoint, student)", async () => {

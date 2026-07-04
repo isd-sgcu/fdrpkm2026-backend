@@ -1,6 +1,6 @@
 import { pgEnum } from "drizzle-orm/pg-core";
 
-export const projectEnum = pgEnum("project", ["firstdate", "rpkm"]);
+export const projectEnum = pgEnum("project", ["firstdate", "rpkm", "freshmennight"]);
 export const roleEnum = pgEnum("role", ["student", "staff"]);
 
 // name title. no _other column for "other".

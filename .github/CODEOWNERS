@@ -1,0 +1,3 @@
+# Default owner for everything in the repo.
+# GitHub automatically requests review from code owners on every PR.
+* @chawinkn
