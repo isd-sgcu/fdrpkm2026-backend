@@ -1,4 +1,8 @@
+import { eq } from "drizzle-orm";
+
 import type { AppErrorCode } from "@src/utils";
+import { db } from "@src/db";
+import { houses, type House } from "@src/db/schema";
 
 /**
  * "Model" layer for MVC — data access + business rules for RPKM
@@ -14,8 +18,19 @@ class RpkmServiceError extends Error {
   }
 }
 
+const listHouses = (): Promise<House[]> => db.select().from(houses);
+
+const getHouse = async (id: string): Promise<House> => {
+  const [house] = await db.select().from(houses).where(eq(houses.id, id));
+  if (!house) throw new RpkmServiceError("NOT_FOUND");
+
+  return house;
+};
+
 // Namespace object — routes call `RpkmService.<fn>(...)` instead of
 // importing individual functions. Add functions here as real logic lands.
 export const RpkmService = {
-  RpkmServiceError
+  RpkmServiceError,
+  listHouses,
+  getHouse
 };

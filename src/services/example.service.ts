@@ -38,6 +38,7 @@ const upsertExampleUser = (input: ExampleUser): ExampleUser => {
 };
 
 const deleteExampleUser = (id: string): void => {
+  // eslint-disable-next-line drizzle/enforce-delete-with-where -- Map.delete, not a Drizzle query; rule can't tell the two apart
   if (!store.delete(id)) throw new ExampleServiceError("NOT_FOUND");
 };
 
