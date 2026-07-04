@@ -2,11 +2,7 @@ import { Elysia, t } from "elysia";
 // Import should be prefixed with @src/ to avoid relative path hell
 import { errorResponse, tErrorResponse } from "@src/utils";
 import { ExampleModel } from "@src/models/example.model";
-import {
-  ExampleServiceError,
-  getExampleUser,
-  upsertExampleUser
-} from "@src/services/example.service";
+import { ExampleService } from "@src/services/example.service";
 import { authMiddleware } from "@src/routes/auth";
 
 /**
@@ -47,9 +43,10 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       try {
         // Controller delegates the actual lookup to the service (Model
         // layer) instead of querying storage itself.
-        return getExampleUser(params.userId);
+        return ExampleService.getExampleUser(params.userId);
       } catch (err) {
-        if (err instanceof ExampleServiceError) return status(404, errorResponse("NOT_FOUND"));
+        if (err instanceof ExampleService.ExampleServiceError)
+          return status(404, errorResponse("NOT_FOUND"));
         throw err;
       }
     },
@@ -70,11 +67,12 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       if (!auth.user)
         return status(401, errorResponse("UNAUTHORIZED", { message: "Login required" }));
       if (auth.user.userId !== params.userId)
-        return status(403, errorResponse("FORBIDDEN", { message: "Not your account" }));
+        // message here is just and example data that can be returned to user, but the 403 schema below has no context, so no message here either — keep in sync.
+        return status(403, errorResponse("FORBIDDEN"));
 
       // Controller stays thin: validate + auth here, everything else
       // (persistence, business rules) lives in the service.
-      return upsertExampleUser({ id: params.userId, ...body });
+      return ExampleService.upsertExampleUser({ id: params.userId, ...body });
     },
     // Part below is for OpenAPI docs and type-safe validation.
     {
@@ -88,7 +86,37 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
 
         // Error code defined in AppErrorCode enum in src/utils/error.ts
         401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() })),
-        403: tErrorResponse("FORBIDDEN", t.Object({ message: t.String() }))
+        403: tErrorResponse("FORBIDDEN")
+      }
+    }
+  )
+  // Go to http://localhost:3000/openapi#DELETE/v1/example/user/{userId} for OpenAPI docs and try it out
+  // Second instanceof-check example: same guard-then-service-then-map-error
+  // shape as the GET above, different error code (still NOT_FOUND here, but
+  // swap in USER_ALREADY_EXISTS/BAD_REQUEST for other business rules).
+  .delete(
+    "/user/:userId",
+    ({ auth, status, params }) => {
+      if (!auth.user)
+        return status(401, errorResponse("UNAUTHORIZED", { message: "Login required" }));
+      if (auth.user.userId !== params.userId) return status(403, errorResponse("FORBIDDEN"));
+
+      try {
+        ExampleService.deleteExampleUser(params.userId);
+        return status(204, undefined);
+      } catch (err) {
+        if (err instanceof ExampleService.ExampleServiceError)
+          return status(404, errorResponse("NOT_FOUND"));
+        throw err;
+      }
+    },
+    {
+      params: "Example.UserUpdateParams",
+      response: {
+        204: t.Void(),
+        401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() })),
+        403: tErrorResponse("FORBIDDEN"),
+        404: tErrorResponse("NOT_FOUND")
       }
     }
   )
