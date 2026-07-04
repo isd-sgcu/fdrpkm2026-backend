@@ -2,14 +2,14 @@
 
 ## 1. ER diagram (schema)
 
-> All `id`/FK columns are `uuid` (`int` shown only for brevity). Every table also has `created_at` + `updated_at`. See `schema.dbml` for the authoritative version.
+> Every table also has `created_at` + `updated_at`. See `schema.dbml` for the authoritative version.
 
 ```mermaid
 erDiagram
     students ||--o{ registrations : has
     registrations ||--o{ travel_legs : trip
-    students ||--o{ fd_entries : enters
-    students ||--o{ fd_entries : scanned_by
+    students ||--o{ entries : enters
+    students ||--o{ entries : scanned_by
     checkpoints ||--o{ scans : logged_at
     students ||--o{ scans : earns
     students ||--o{ groups : leads
@@ -19,7 +19,7 @@ erDiagram
     houses ||--o{ groups : assigned_to
 
     students {
-        int id PK
+        uuid id PK
         text student_id UK "QR payload; 69%% = year one"
         text email UK "from Chula SSO"
         text prefix "NN default not_specified; mr|mrs|ms|not_specified|other"
@@ -40,18 +40,18 @@ erDiagram
         text pno_sgcu_awareness "survey (P&O)"
     }
     registrations {
-        int id PK
-        int student_id FK
+        uuid id PK
+        uuid student_id FK
         text project "firstdate | rpkm"
         timestamptz pdpa_accepted_at
         int attended_days "RPKM carbon"
-        int group_id FK "RPKM only; holds membership (1:1)"
+        uuid group_id FK "RPKM only; holds membership (1:1)"
         text pno_referral_source "survey (P&O)"
         unique student_project "uniq(student_id, project)"
     }
     travel_legs {
-        int id PK
-        int registration_id FK
+        uuid id PK
+        uuid registration_id FK
         int seq "1 or 2"
         text vehicle "8 types + other"
         text vehicle_other
@@ -60,15 +60,16 @@ erDiagram
         text destination_district "free text"
         text destination_province "free text"
     }
-    fd_entries {
-        int id PK
-        int student_id FK "freshman who entered"
-        int scanned_by FK "staff"
+    entries {
+        uuid id PK
+        uuid student_id FK "freshman who entered"
+        uuid scanned_by FK "staff"
+        text event "firstdate | freshmennight | rpkm"
         timestamptz scanned_at
-        unique student "uniq(student_id) - FD only"
+        unique student_event "uniq(student_id, event)"
     }
     checkpoints {
-        int id PK
+        uuid id PK
         text game "jigsaw (10) | csr (35)"
         text code UK "QR payload"
         numeric lat
@@ -76,32 +77,32 @@ erDiagram
         int geofence_radius_m "default 50"
     }
     scans {
-        int id PK
-        int checkpoint_id FK
-        int student_id FK
+        uuid id PK
+        uuid checkpoint_id FK
+        uuid student_id FK
         timestamptz scanned_at "logging req"
         numeric lat
         numeric lng
         unique cp_student "uniq(checkpoint_id, student_id)"
     }
     houses {
-        int id PK
+        uuid id PK
         text code UK "name/desc in i18n"
         int capacity
         jsonb info
     }
     groups {
-        int id PK
-        int leader_id FK
+        uuid id PK
+        uuid leader_id FK
         text join_code UK "6-digit, regenerable"
-        int assigned_house_id FK "null until random"
+        uuid assigned_house_id FK "null until random"
         timestamptz assigned_at
         timestamptz created_at
     }
     group_house_choices {
-        int id PK
-        int group_id FK
-        int house_id FK
+        uuid id PK
+        uuid group_id FK
+        uuid house_id FK
         int rank "1..5"
     }
 ```
@@ -128,8 +129,8 @@ flowchart TD
     subgraph FD [FirstDate]
         direction TB
         FDhome[FD activities]:::fd --> MyQR[My QR = student_id]
-        MyQR --> StaffScan[[Staff scans 18th]]
-        StaffScan --> Att[(fd_entries)]
+        MyQR --> StaffScan[[Staff scans at event]]
+        StaffScan --> Att[(entries:<br/>firstdate | freshmennight | rpkm)]
     end
 
     subgraph RPKM [RPKM]

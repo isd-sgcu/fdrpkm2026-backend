@@ -28,8 +28,8 @@ Think of each table as a spreadsheet/list. Here are all 9:
 - **registrations** — one row per (person + project). Holds their PDPA consent and, for RPKM, how many days they attended. A person can have up to two: one for FirstDate, one for RPKM.
 - **travel_legs** — the carbon-footprint travel answers. A trip can have up to 2 legs (e.g. walk → BTS), so each leg is its own row: vehicle type, origin district, destination. We only store the answers — we do **not** calculate carbon ourselves (whoever owns that data does the math later).
 
-### FirstDate event day
-- **fd_entries** — when a staff scans a น้อง's QR at the FirstDate event (18 July), we record it here. One row per น้อง. If scanning fails, staff can type the student ID instead — same result.
+### Event entry scans
+- **entries** — when a staff scans a น้อง's QR at an event entrance, we record it here. Each event is scanned separately (`event` = `firstdate` | `freshmennight` | `rpkm`), so up to three rows per น้อง — one per event. If scanning fails, staff can type the student ID instead — same result.
 
 ### RPKM stamp games (Jigsaw + CSR)
 - **checkpoints** — the QR-code points. 10 points around campus (Jigsaw) + ~35 shops (CSR). Each has its location.
