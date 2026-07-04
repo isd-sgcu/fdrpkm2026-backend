@@ -18,21 +18,35 @@ export type ExampleUser = {
 const store = new Map<string, ExampleUser>();
 
 /** Thrown on expected business failures; controller maps `code` to an HTTP status. */
-export class ExampleServiceError extends Error {
+class ExampleServiceError extends Error {
   constructor(public code: AppErrorCode) {
     super(code);
   }
 }
 
-export const getExampleUser = (id: string): ExampleUser => {
+const getExampleUser = (id: string): ExampleUser => {
   const user = store.get(id);
   if (!user) throw new ExampleServiceError("NOT_FOUND");
 
   return user;
 };
 
-export const upsertExampleUser = (input: ExampleUser): ExampleUser => {
+const upsertExampleUser = (input: ExampleUser): ExampleUser => {
   store.set(input.id, input);
 
   return input;
+};
+
+const deleteExampleUser = (id: string): void => {
+  if (!store.delete(id)) throw new ExampleServiceError("NOT_FOUND");
+};
+
+// Namespace object — routes call `ExampleService.getExampleUser(...)` instead
+// of importing individual functions, so every feature's service is reached
+// through one consistent name (mirrors ExampleModel/FirstDateService/RpkmService).
+export const ExampleService = {
+  ExampleServiceError,
+  getExampleUser,
+  upsertExampleUser,
+  deleteExampleUser
 };
