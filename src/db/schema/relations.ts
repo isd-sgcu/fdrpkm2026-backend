@@ -1,6 +1,6 @@
 import { relations } from "drizzle-orm";
 
-import { fdEntries } from "./firstdate.schema";
+import { entries } from "./entries.schema";
 import { checkpoints, scans } from "./games.schema";
 import { groupHouseChoices, groups, houses } from "./houses.schema";
 import { registrations, students, travelLegs } from "./identity.schema";
@@ -8,10 +8,10 @@ import { registrations, students, travelLegs } from "./identity.schema";
 export const studentsRelations = relations(students, ({ many }) => ({
   registrations: many(registrations),
   groupsLed: many(groups, { relationName: "groupLeader" }),
-  // fd_entries has 2 FKs to students -> both reverse sides need a relationName.
-  // entrant is 1:1 (unique student_id) but drizzle's reverse is many() -> 0/1-length array.
-  fdEntryAsEntrant: many(fdEntries, { relationName: "fdEntrant" }),
-  fdEntriesScanned: many(fdEntries, { relationName: "fdScanner" }),
+  // entries has 2 FKs to students -> both reverse sides need a relationName.
+  // entrant is unique per (project, student); drizzle's reverse is many() -> one row per project.
+  entriesAsEntrant: many(entries, { relationName: "entrant" }),
+  entriesScanned: many(entries, { relationName: "scanner" }),
   scans: many(scans)
 }));
 
@@ -28,16 +28,16 @@ export const travelLegsRelations = relations(travelLegs, ({ one }) => ({
   })
 }));
 
-export const fdEntriesRelations = relations(fdEntries, ({ one }) => ({
+export const entriesRelations = relations(entries, ({ one }) => ({
   student: one(students, {
-    fields: [fdEntries.studentId],
+    fields: [entries.studentId],
     references: [students.id],
-    relationName: "fdEntrant"
+    relationName: "entrant"
   }),
   scannedBy: one(students, {
-    fields: [fdEntries.scannedBy],
+    fields: [entries.scannedBy],
     references: [students.id],
-    relationName: "fdScanner"
+    relationName: "scanner"
   })
 }));
 

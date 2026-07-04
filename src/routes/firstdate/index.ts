@@ -5,7 +5,7 @@ import { FirstDateService } from "@src/services/firstdate.service";
 
 /**
  * FirstDate-only routes. project context = 'firstdate'.
- * e.g. registration, My-QR, staff entry scan (fd_entries).
+ * e.g. registration, My-QR, staff entry scan (entries, project=firstdate).
  */
 export const firstdateRoutes = new Elysia({ prefix: "/fd" })
   // put auth here so the types are inferred correctly in the route handlers below. The auth macro is available as `ctx.auth` in handlers.

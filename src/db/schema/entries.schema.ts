@@ -2,13 +2,15 @@ import * as t from "drizzle-orm/pg-core";
 
 import { id, timestamps } from "./helper";
 import { students } from "./identity.schema";
+import { projectEnum } from "./enums";
 
-// firstdate entry scan: staff scans the น้อง (or types student_id on fail). one row per student.
+// event entry scan: staff scans the น้อง (or types student_id on fail). one row per (project, student).
 // not the same as scans (the games) — staff-scans-participant vs น้อง-self-scans-point.
-export const fdEntries = t.pgTable(
-  "fd_entries",
+export const entries = t.pgTable(
+  "entries",
   {
     ...id,
+    project: projectEnum("project").notNull(),
     studentId: t
       .uuid("student_id")
       .notNull()
@@ -20,8 +22,8 @@ export const fdEntries = t.pgTable(
     scannedAt: t.timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
     ...timestamps
   },
-  (table) => [t.unique("fd_entries_student_unique").on(table.studentId)]
+  (table) => [t.unique("entries_project_student_unique").on(table.project, table.studentId)]
 );
 
-export type FdEntry = typeof fdEntries.$inferSelect;
-export type NewFdEntry = typeof fdEntries.$inferInsert;
+export type Entry = typeof entries.$inferSelect;
+export type NewEntry = typeof entries.$inferInsert;
