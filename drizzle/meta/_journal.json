@@ -15,6 +15,13 @@
       "when": 1783007651855,
       "tag": "0001_updated_at_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783164900756,
+      "tag": "0002_generalize_entries",
+      "breakpoints": true
     }
   ]
 }
