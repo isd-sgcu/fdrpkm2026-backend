@@ -22,6 +22,13 @@
       "when": 1783164900756,
       "tag": "0002_generalize_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783174480308,
+      "tag": "0003_awesome_anita_blake",
+      "breakpoints": true
     }
   ]
 }
