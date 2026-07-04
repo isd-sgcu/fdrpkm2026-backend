@@ -60,6 +60,36 @@ Project context comes from the **Host header** (`fd-api.*` = firstdate, `rpkm-ap
 
 Adding a new feature route/service? See [`docs/new-route.md`](docs/new-route.md) for the step-by-step and [`docs/mvc.md`](docs/mvc.md) for the layering rules.
 
+## Documentation
+
+All docs live in [`docs/`](docs/):
+
+### Guides
+
+| Doc                                                | What it covers                                                                      |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [`docs/new-route.md`](docs/new-route.md)           | Step-by-step for adding a new feature route + service — **start here** for new work |
+| [`docs/mvc.md`](docs/mvc.md)                       | Layering convention (controller / service / model) on top of Elysia                 |
+| [`docs/drizzle-elysia.md`](docs/drizzle-elysia.md) | How Drizzle and Elysia are wired together in this repo                              |
+| [`docs/upload-guide.md`](docs/upload-guide.md)     | Adding a file upload feature using the existing S3 storage plumbing                 |
+
+### Auth (`docs/auth/`)
+
+| Doc                                                        | What it covers                                                    |
+| ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| [`docs/auth/overview.md`](docs/auth/overview.md)           | Client-facing HTTP flows — sign-in, session, sign-out             |
+| [`docs/auth/backend-usage.md`](docs/auth/backend-usage.md) | Protecting routes in this repo (server-side auth usage)           |
+| [`docs/auth/google-flow.md`](docs/auth/google-flow.md)     | Google / Chula SSO sign-in sequence diagram across both frontends |
+
+### Database (`docs/db/`)
+
+| Doc                                                | What it covers                                                                         |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [`docs/db/overview.md`](docs/db/overview.md)       | Plain-language summary of the shared data model — no DB background needed              |
+| [`docs/db/schema-spec.md`](docs/db/schema-spec.md) | The full spec: 10 tables, constraints, indexes, FK rules, transaction rules            |
+| [`docs/db/diagrams.md`](docs/db/diagrams.md)       | ER diagram + flow and group state machine                                              |
+| [`docs/db/schema.dbml`](docs/db/schema.dbml)       | DBML source — paste into [dbdiagram.io](https://dbdiagram.io) for diagram + SQL export |
+
 ## Layout
 
 ```
@@ -73,19 +103,26 @@ src/
     auth/           Chula SSO login + callback (project from Host header)
     firstdate/      project=firstdate routes
     rpkm/           project=rpkm routes
-docs/db/            DATABASE DESIGN — implement this with Drizzle (see below)
+  db/
+    index.ts        db client (PGlite locally, Postgres via DATABASE_URL)
+    schema/         Drizzle schema — identity, houses, games, firstdate, auth
+drizzle/            generated SQL migrations
+docs/db/            database design docs (spec, diagrams, overview)
 ```
 
-## Database — TODO (backend team owns this)
+## Database
 
-The schema is **designed but not yet implemented** — that's your job. Everything you need is in `docs/db/`:
+The schema from `docs/db/` is **implemented** with Drizzle in `src/db/schema/`, with generated migrations in `drizzle/`:
 
-- `schema-spec.md` — the 10 tables, constraints, indexes, FK rules, transaction rules
-- `schema.dbml` — paste into [dbdiagram.io](https://dbdiagram.io) for the ER diagram + a free PostgreSQL `CREATE TABLE` export
-- `diagrams.md` — flow + group state machine
-- `overview.md` — plain-language summary
+- `identity.schema.ts` — `students`, `registrations`, `travel_legs` (shared between both projects)
+- `houses.schema.ts` — `houses`, `groups`, `group_house_choices` (RPKM)
+- `games.schema.ts` — `checkpoints`, `scans` (QR games)
+- `firstdate.schema.ts` — `fd_entries` (FD entry scan)
+- `auth.schema.ts` — Better Auth tables (regenerate with `bun run auth:generate`, don't hand-edit)
 
-Suggested path: set up Drizzle (`drizzle-orm` + `drizzle-kit` + `postgres`), write `src/db/schema.ts` from the spec, add `DATABASE_URL` to env, generate + run migrations, seed houses/checkpoints.
+Locally the client falls back to PGlite (`DATABASE_FILE`) when `NODE_ENV=development` and no `DATABASE_URL` is set — see `src/db/index.ts`. Design rationale lives in `docs/db/` (see [Documentation](#documentation)).
+
+Changing the schema? Edit `src/db/schema/`, then `bun run db:generate` and commit the new migration in `drizzle/`. Still TODO: seeding houses/checkpoints.
 
 Key contract (don't skip): shared tables `students`/`registrations`/`travel_legs` are written by both projects — upsert students by `student_id`, one `registrations` row per `(student, project)`. Group ops run in a transaction with `SELECT … FOR UPDATE` on the group row.
 
