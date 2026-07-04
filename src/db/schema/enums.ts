@@ -7,7 +7,7 @@ export const roleEnum = pgEnum("role", ["student", "staff"]);
 export const prefixEnum = pgEnum("prefix", ["mr", "mrs", "ms", "not_specified", "other"]);
 
 // label that tells the two stamp games apart (checkpoints.game) — not an FK.
-export const gameEnum = pgEnum("game", ["jigsaw", "csr"]);
+export const gameEnum = pgEnum("game", ["jigsaw", "csr", "walkrally"]);
 
 // "other" -> vehicle_other free text
 export const vehicleEnum = pgEnum("vehicle", [
