@@ -21,6 +21,7 @@ import { authMiddleware } from "@src/routes/auth";
  * Routes should stay thin. If a handler is doing more than a couple of
  * lines of logic, that logic belongs in the service, not here.
  */
+// eslint-disable-next-line drizzle/enforce-delete-with-where -- flags the whole chain below for its .delete(...) route method (not a Drizzle query)
 export const exampleRoutes = new Elysia({ prefix: "/example" })
   // Fake auth for demo only. Real routes should derive `auth` from an
   // actual auth plugin (see src/routes/auth), never Math.random().
