@@ -36,9 +36,9 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     },
     {
       auth: true,
-      body: "Groups.JoinBody",
+      body: GroupsModel.models.joinBody.Schema(),
       response: {
-        200: tSuccessResponse(t.Ref("Groups.GroupWithMembers")),
+        200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_FRESHMEN"),
         404: t.Union([tErrorResponse("INVALID_JOIN_CODE"), tErrorResponse("NOT_FOUND")]),
@@ -64,7 +64,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     {
       auth: true,
       response: {
-        200: tSuccessResponse(t.Ref("Groups.GroupWithMembers")),
+        200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         404: tErrorResponse("NOT_FOUND")
       }
@@ -92,7 +92,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     {
       auth: true,
       response: {
-        200: tSuccessResponse(t.Ref("Groups.JoinCodeResponse")),
+        200: tSuccessResponse(GroupsModel.models.joinCodeResponse.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_LEADER"),
         404: tErrorResponse("NOT_FOUND"),
@@ -114,7 +114,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     {
       auth: true,
       response: {
-        200: tSuccessResponse(t.Ref("Groups.HousePreferencesResponse")),
+        200: tSuccessResponse(GroupsModel.models.housePreferencesResponse.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         404: tErrorResponse("NOT_FOUND")
       }
@@ -143,9 +143,9 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     },
     {
       auth: true,
-      body: "Groups.HousePreferencesBody",
+      body: GroupsModel.models.housePreferencesBody.Schema(),
       response: {
-        200: tSuccessResponse(t.Ref("Groups.HousePreferencesResponse")),
+        200: tSuccessResponse(GroupsModel.models.housePreferencesResponse.Schema()),
         400: tErrorResponse("BAD_REQUEST"),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_LEADER"),
@@ -174,7 +174,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     {
       auth: true,
       response: {
-        200: tSuccessResponse(t.Ref("Groups.GroupWithMembers")),
+        200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         404: tErrorResponse("NOT_FOUND"),
         409: tErrorResponse("ALREADY_CONFIRMED")
@@ -204,9 +204,9 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     },
     {
       auth: true,
-      params: "Groups.MemberParams",
+      params: GroupsModel.models.memberParams.Schema(),
       response: {
-        200: tSuccessResponse(t.Ref("Groups.GroupWithMembers")),
+        200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
         400: tErrorResponse("BAD_REQUEST"),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_LEADER"),

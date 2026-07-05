@@ -15,7 +15,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
   // validation, and OpenAPI, instead of a hand-duplicated t.Object.
   .get("/", () => HousesService.listHouses(), {
     auth: true,
-    response: { 200: t.Array(t.Ref("Houses.House")) }
+    response: { 200: t.Array(HousesModel.models.house.Schema()) }
   })
   .get(
     "/stats",
@@ -26,7 +26,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     {
       auth: true,
       response: {
-        200: t.Array(t.Ref("Houses.HouseStat")),
+        200: t.Array(HousesModel.models.houseStat.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_FRESHMEN")
       }
@@ -45,9 +45,9 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     },
     {
       auth: true,
-      params: "Houses.HouseId",
+      params: HousesModel.models.houseId.Schema(),
       response: {
-        200: "Houses.House",
+        200: HousesModel.models.house.Schema(),
         404: tErrorResponse("NOT_FOUND")
       }
     }
@@ -74,7 +74,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     {
       auth: true,
       response: {
-        200: tSuccessResponse(t.Ref("Houses.HouseResult")),
+        200: tSuccessResponse(HousesModel.models.houseResult.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("RESULT_NOT_ANNOUNCED")]),
         404: tErrorResponse("NOT_FOUND")
@@ -107,7 +107,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     {
       auth: true,
       response: {
-        200: tSuccessResponse(t.Ref("Houses.ConfirmResponse")),
+        200: tSuccessResponse(HousesModel.models.confirmResponse.Schema()),
         400: tErrorResponse("HOUSE_PREF_INCOMPLETE"),
         401: tErrorResponse("UNAUTHORIZED"),
         403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("NOT_LEADER")]),
