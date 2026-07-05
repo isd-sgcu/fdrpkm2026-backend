@@ -3,6 +3,8 @@ import { count, eq, isNotNull } from "drizzle-orm";
 import type { AppErrorCode } from "@src/utils";
 import { db } from "@src/db";
 import { groupHouseChoices, houses, registrations, type House } from "@src/db/schema";
+import { isEventActive } from "@src/utils/flags";
+import { GroupsService } from "@src/services/groups.service";
 
 /**
  * "Model" layer for MVC — data access + business rules for houses
@@ -75,11 +77,39 @@ const getHouseStats = async (): Promise<HouseStat[]> => {
     .sort((a, b) => b.count - a.count);
 };
 
+/**
+ * The current student's group's assigned house, once results are announced.
+ * @param studentId CUNET id (from authMiddleware)
+ * @returns `{ house: null }` if the group never got one (never picked houses,
+ *   or registered/picked after the deadline — the draw skips both, so
+ *   `assignedHouseId` stays null either way) — wrapped in an object because
+ *   successResponse()'s generic can't accept a bare nullable value.
+ * @throws {HousesServiceError} RESULT_NOT_ANNOUNCED if before the announce
+ *   time, NOT_FOUND if the student or their group can't be resolved
+ */
+const getHouseResult = async (studentId: string): Promise<{ house: House | null }> => {
+  if (!isEventActive("rpkm_house_result")) throw new HousesServiceError("RESULT_NOT_ANNOUNCED");
+
+  let group;
+  try {
+    ({ group } = await GroupsService.getCurrentGroup(studentId));
+  } catch (err) {
+    // Translate at the service boundary so callers only ever need to check
+    // HousesServiceError, not know this function also reaches into GroupsService.
+    if (err instanceof GroupsService.GroupsServiceError) throw new HousesServiceError(err.code);
+    throw err;
+  }
+  if (!group.assignedHouseId) return { house: null };
+
+  return { house: await getHouse(group.assignedHouseId) };
+};
+
 // Namespace object — routes call `HousesService.<fn>(...)` instead of
 // importing individual functions.
 export const HousesService = {
   HousesServiceError,
   listHouses,
   getHouse,
-  getHouseStats
+  getHouseStats,
+  getHouseResult
 };

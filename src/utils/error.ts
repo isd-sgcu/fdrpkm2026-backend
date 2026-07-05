@@ -31,6 +31,8 @@ export const AppErrorCode = {
   NOT_LEADER: "NOT_LEADER",
   /** 400: PDPA consent is required but was not given. */
   PDPA_REQUIRED: "PDPA_REQUIRED",
+  /** 403: house results haven't been announced yet. */
+  RESULT_NOT_ANNOUNCED: "RESULT_NOT_ANNOUNCED",
   /** 401: request lacks valid authentication credentials. */
   UNAUTHORIZED: "UNAUTHORIZED",
   /** 409: user already exists, cannot register again. */

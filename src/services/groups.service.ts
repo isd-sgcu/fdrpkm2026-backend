@@ -12,6 +12,7 @@ import {
   type Student
 } from "@src/db/schema";
 import type { AppErrorCode } from "@src/utils";
+import { isEventPassed } from "@src/utils/flags";
 
 type GroupMember = {
   userId: string;
@@ -211,8 +212,8 @@ const getHousePreferences = async (
  * @param studentId CUNET id (from authMiddleware)
  * @param houseIds ranked house ids, most preferred first (rank = index + 1)
  * @throws {GroupsServiceError} NOT_FOUND if the student/group/a houseId can't be resolved,
- *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the group is already
- *   confirmed, BAD_REQUEST if houseIds has duplicates
+ *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the group already confirmed
+ *   or the house-pick deadline has passed, BAD_REQUEST if houseIds has duplicates
  */
 const setHousePreferences = async (
   studentId: string,
@@ -220,7 +221,8 @@ const setHousePreferences = async (
 ): Promise<{ housePreferences: GroupHouseChoice[] }> => {
   const { student, group } = await getCurrentGroup(studentId);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
-  if (group.confirmedAt) throw new GroupsServiceError("HOUSE_PICK_CLOSED");
+  if (group.confirmedAt || isEventPassed("rpkm_house_pick"))
+    throw new GroupsServiceError("HOUSE_PICK_CLOSED");
   if (new Set(houseIds).size !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
 
   const existingHouses = await db.select().from(houses).where(inArray(houses.id, houseIds));
@@ -384,5 +386,6 @@ export const GroupsService = {
   kickMember,
   confirmGroup,
   isFreshman,
-  resolveCurrentStudent
+  resolveCurrentStudent,
+  getCurrentGroup
 };
