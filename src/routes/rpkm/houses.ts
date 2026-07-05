@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { authMiddleware } from "@src/routes/auth";
 import { HousesModel } from "@src/models/houses.model";
 import { GroupsService } from "@src/services/groups.service";
-import { RpkmService } from "@src/services/rpkm.service";
+import { HousesService } from "@src/services/houses.service";
 import { errorResponse, successResponse, tErrorResponse, tSuccessResponse } from "@src/utils";
 
 export const houseRoute = new Elysia({ prefix: "/houses" })
@@ -13,17 +13,32 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
   // `house`/`houseId` schemas come from HousesModel, which builds them from
   // the `houses` Drizzle table via drizzle-typebox — one schema for DB rows,
   // validation, and OpenAPI, instead of a hand-duplicated t.Object.
-  .get("/", () => RpkmService.listHouses(), {
+  .get("/", () => HousesService.listHouses(), {
     auth: true,
     response: { 200: t.Array(t.Ref("Houses.House")) }
   })
   .get(
+    "/stats",
+    async ({ studentId, status }) => {
+      if (!GroupsService.isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
+      return HousesService.getHouseStats();
+    },
+    {
+      auth: true,
+      response: {
+        200: t.Array(t.Ref("Houses.HouseStat")),
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN")
+      }
+    }
+  )
+  .get(
     "/:id",
     async ({ status, params }) => {
       try {
-        return await RpkmService.getHouse(params.id);
+        return await HousesService.getHouse(params.id);
       } catch (err) {
-        if (err instanceof RpkmService.RpkmServiceError)
+        if (err instanceof HousesService.HousesServiceError)
           return status(404, errorResponse("NOT_FOUND"));
         throw err;
       }

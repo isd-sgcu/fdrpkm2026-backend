@@ -20,6 +20,14 @@ export const HousesModel = new Elysia().model({
   }),
   confirmResponse: t.Object({
     confirmedAt: t.Date({ title: "Confirmed At" })
+  }),
+  houseStat: t.Object({
+    houseId: t.String({ format: "uuid", title: "House ID" }),
+    code: t.String({ title: "House Code" }),
+    count: t.Integer({
+      title: "Applicant Count",
+      description: "Students who applied to this house — counts a group's rank-1 pick only"
+    })
   })
 });
 // No self-prefix — the consuming route applies its own namespace, same
