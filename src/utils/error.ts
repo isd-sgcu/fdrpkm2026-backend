@@ -11,6 +11,8 @@ export const AppErrorCode = {
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
   /** 404: requested resource does not exist. */
   NOT_FOUND: "NOT_FOUND",
+  /** 403: user is not a freshmen, cannot access resource. */
+  NOT_FRESHMEN: "NOT_FRESHMEN",
   /** 401: request lacks valid authentication credentials. */
   UNAUTHORIZED: "UNAUTHORIZED",
   /** 409: user already exists, cannot register again. */

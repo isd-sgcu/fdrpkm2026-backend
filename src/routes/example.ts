@@ -64,12 +64,17 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
   // Go to http://localhost:3000/openapi#POST/v1/example/user/{userId} for OpenAPI docs and try it out
   .post(
     "/user/:userId",
-    ({ auth, status, params, body }) => {
+    ({ auth, status, params, body, studentId }) => {
       if (!auth.user)
         return status(401, errorResponse("UNAUTHORIZED", { message: "Login required" }));
       if (auth.user.userId !== params.userId)
         // message here is just and example data that can be returned to user, but the 403 schema below has no context, so no message here either — keep in sync.
         return status(403, errorResponse("FORBIDDEN"));
+      if (!studentId.startsWith("69"))
+        return status(
+          403,
+          errorResponse("NOT_FRESHMEN", { message: "Only freshmen can update their information" })
+        );
 
       // Controller stays thin: validate + auth here, everything else
       // (persistence, business rules) lives in the service.
@@ -77,6 +82,7 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
     },
     // Part below is for OpenAPI docs and type-safe validation.
     {
+      auth: true,
       // Type-safe params and it will show in OpenAPI Docs
       params: "Example.UserUpdateParams",
       // Type-safe request body, auto api doc and also auto validation
@@ -87,7 +93,7 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
 
         // Error code defined in AppErrorCode enum in src/utils/error.ts
         401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() })),
-        403: tErrorResponse("FORBIDDEN")
+        403: t.Union([tErrorResponse("FORBIDDEN"), tErrorResponse("NOT_FRESHMEN")])
       }
     }
   )
