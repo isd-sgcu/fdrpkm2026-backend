@@ -55,13 +55,13 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
   .get(
     "/result",
     async ({ studentId, status }) => {
-      if (!GroupsService.isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
-
       try {
-        return successResponse(await HousesService.getHouseResult(studentId));
+        return { success: true as const, data: await HousesService.getHouseResult(studentId) };
       } catch (err) {
         if (err instanceof HousesService.HousesServiceError) {
           switch (err.code) {
+            case "NOT_FRESHMEN":
+              return status(403, errorResponse("NOT_FRESHMEN"));
             case "RESULT_NOT_ANNOUNCED":
               return status(403, errorResponse("RESULT_NOT_ANNOUNCED"));
             default:
@@ -74,7 +74,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     {
       auth: true,
       response: {
-        200: tSuccessResponse(t.Ref("Houses.HouseResultResponse")),
+        200: tSuccessResponse(t.Ref("Houses.HouseResult")),
         401: tErrorResponse("UNAUTHORIZED"),
         403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("RESULT_NOT_ANNOUNCED")]),
         404: tErrorResponse("NOT_FOUND")

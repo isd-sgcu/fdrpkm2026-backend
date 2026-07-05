@@ -80,28 +80,26 @@ const getHouseStats = async (): Promise<HouseStat[]> => {
 /**
  * The current student's group's assigned house, once results are announced.
  * @param studentId CUNET id (from authMiddleware)
- * @returns `{ house: null }` if the group never got one (never picked houses,
- *   or registered/picked after the deadline — the draw skips both, so
- *   `assignedHouseId` stays null either way) — wrapped in an object because
- *   successResponse()'s generic can't accept a bare nullable value.
- * @throws {HousesServiceError} RESULT_NOT_ANNOUNCED if before the announce
- *   time, NOT_FOUND if the student or their group can't be resolved
+ * @returns null if the group never got one (never picked houses, or
+ *   registered/picked after the deadline — the draw skips both, so
+ *   `assignedHouseId` stays null either way)
+ * @throws {HousesServiceError} NOT_FRESHMEN, RESULT_NOT_ANNOUNCED if before
+ *   the announce time, NOT_FOUND if the student or their group can't be resolved
  */
-const getHouseResult = async (studentId: string): Promise<{ house: House | null }> => {
+const getHouseResult = async (studentId: string): Promise<House | null> => {
+  if (!GroupsService.isFreshman(studentId)) throw new HousesServiceError("NOT_FRESHMEN");
   if (!isEventActive("rpkm_house_result")) throw new HousesServiceError("RESULT_NOT_ANNOUNCED");
 
   let group;
   try {
     ({ group } = await GroupsService.getCurrentGroup(studentId));
   } catch (err) {
-    // Translate at the service boundary so callers only ever need to check
-    // HousesServiceError, not know this function also reaches into GroupsService.
     if (err instanceof GroupsService.GroupsServiceError) throw new HousesServiceError(err.code);
     throw err;
   }
-  if (!group.assignedHouseId) return { house: null };
+  if (!group.assignedHouseId) return null;
 
-  return { house: await getHouse(group.assignedHouseId) };
+  return getHouse(group.assignedHouseId);
 };
 
 // Namespace object — routes call `HousesService.<fn>(...)` instead of
