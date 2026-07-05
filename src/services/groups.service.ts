@@ -81,11 +81,12 @@ const getCurrentRegistration = async (studentId: string) => {
 };
 
 /**
- * Current group + members for the logged-in student.
+ * Resolves student -> their rpkm registration -> the group it points to.
+ * Shared by every endpoint that acts on "the caller's current group".
  * @param studentId CUNET id (from authMiddleware)
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
+ * @throws {GroupsServiceError} NOT_FOUND if the student, their registration, or their group can't be resolved
  */
-const getMyGroup = async (studentId: string): Promise<GroupWithMembers> => {
+const getCurrentGroup = async (studentId: string) => {
   const student = await resolveCurrentStudent(studentId);
   const registration = await getCurrentRegistration(student.id);
   if (!registration.groupId) throw new GroupsServiceError("NOT_FOUND");
@@ -93,7 +94,30 @@ const getMyGroup = async (studentId: string): Promise<GroupWithMembers> => {
   const [group] = await db.select().from(groups).where(eq(groups.id, registration.groupId));
   if (!group) throw new GroupsServiceError("NOT_FOUND");
 
+  return { student, registration, group };
+};
+
+/**
+ * Current group + members for the logged-in student.
+ * @param studentId CUNET id (from authMiddleware)
+ * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
+ */
+const getMyGroup = async (studentId: string): Promise<GroupWithMembers> => {
+  const { group } = await getCurrentGroup(studentId);
   return getGroupWithMembers(group);
+};
+
+/**
+ * A random unused 6-digit join code (see groups.model.ts's joinCode pattern).
+ * @throws {GroupsServiceError} INTERNAL_SERVER_ERROR if no unused code is found after 10 tries
+ */
+const generateJoinCode = async (): Promise<string> => {
+  for (let i = 0; i < 10; i++) {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const [existing] = await db.select().from(groups).where(eq(groups.joinCode, code));
+    if (!existing) return code;
+  }
+  throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
 };
 
 /**
@@ -143,10 +167,74 @@ const join = async (studentId: string, joinCode: string): Promise<GroupWithMembe
   return getGroupWithMembers(targetGroup);
 };
 
+/**
+ * Leave the current group into a fresh solo group. If the caller is the
+ * leader of a group with other members, the group dissolves and every other
+ * member also gets their own fresh solo group.
+ * @param studentId CUNET id of the student leaving (from authMiddleware)
+ * @returns the caller's new solo group
+ * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
+ */
+const leave = async (studentId: string): Promise<GroupWithMembers> => {
+  const { student, registration, group: oldGroup } = await getCurrentGroup(studentId);
+
+  const isLeader = oldGroup.leaderId === student.id;
+  const oldMembers = await getGroupMembers(oldGroup);
+
+  return db.transaction(async (tx) => {
+    const createSoloGroup = async (leaderId: string) => {
+      const joinCode = await generateJoinCode();
+      const [group] = await tx.insert(groups).values({ leaderId, joinCode }).returning();
+      return group;
+    };
+
+    const newGroup = await createSoloGroup(student.id);
+    await tx
+      .update(registrations)
+      .set({ groupId: newGroup.id })
+      .where(eq(registrations.id, registration.id));
+
+    if (isLeader) {
+      // group dissolves: every other member also gets their own fresh solo group.
+      for (const member of oldMembers) {
+        if (member.userId === student.id) continue;
+        const memberGroup = await createSoloGroup(member.userId);
+        await tx
+          .update(registrations)
+          .set({ groupId: memberGroup.id })
+          .where(
+            and(eq(registrations.studentId, member.userId), eq(registrations.project, "rpkm"))
+          );
+      }
+      await tx.delete(groups).where(eq(groups.id, oldGroup.id));
+    }
+    // else: a non-leader member just leaves — the old group keeps its remaining members.
+
+    return getGroupWithMembers(newGroup);
+  });
+};
+
+/**
+ * Regenerate the caller's group's join code. Leader-only.
+ * @param studentId CUNET id (from authMiddleware)
+ * @returns the new join code
+ * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved, NOT_LEADER if not the group's leader
+ */
+const regenerateJoinCode = async (studentId: string): Promise<string> => {
+  const { student, group } = await getCurrentGroup(studentId);
+  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
+
+  const joinCode = await generateJoinCode();
+  await db.update(groups).set({ joinCode }).where(eq(groups.id, group.id));
+  return joinCode;
+};
+
 export const GroupsService = {
   GroupsServiceError,
   isFreshman,
   resolveCurrentStudent,
   getMyGroup,
-  join
+  join,
+  leave,
+  regenerateJoinCode
 };

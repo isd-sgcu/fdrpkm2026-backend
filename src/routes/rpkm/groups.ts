@@ -4,6 +4,7 @@ import { GroupsService } from "@src/services/groups.service";
 import { errorResponse, successResponse, tErrorResponse, tSuccessResponse } from "@src/utils";
 import { Elysia, t } from "elysia";
 
+// eslint-disable-next-line drizzle/enforce-delete-with-where -- flags the whole chain below for its .delete(...) route method (not a Drizzle query)
 export const groupRoute = new Elysia({ prefix: "/groups" })
   .use(authMiddleware)
   .use(GroupsModel)
@@ -62,10 +63,55 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
         404: tErrorResponse("NOT_FOUND")
       }
     }
+  )
+  .post(
+    "me/join-code/regenerate",
+    async ({ studentId, status }) => {
+      try {
+        return successResponse({ joinCode: await GroupsService.regenerateJoinCode(studentId) });
+      } catch (err) {
+        if (err instanceof GroupsService.GroupsServiceError) {
+          switch (err.code) {
+            case "NOT_LEADER":
+              return status(403, errorResponse("NOT_LEADER"));
+            default:
+              return status(404, errorResponse("NOT_FOUND"));
+          }
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      response: {
+        200: tSuccessResponse(t.Ref("Groups.JoinCodeResponse")),
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_LEADER"),
+        404: tErrorResponse("NOT_FOUND")
+      }
+    }
+  )
+  .delete(
+    "me",
+    async ({ studentId, status }) => {
+      try {
+        return successResponse(await GroupsService.leave(studentId));
+      } catch (err) {
+        if (err instanceof GroupsService.GroupsServiceError)
+          return status(404, errorResponse("NOT_FOUND"));
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      response: {
+        200: tSuccessResponse(t.Ref("Groups.GroupWithMembers")),
+        401: tErrorResponse("UNAUTHORIZED"),
+        404: tErrorResponse("NOT_FOUND")
+      }
+    }
   );
 // .get("me/house-preferences", ({ auth, status }) => {})
 // .put("me/house-preferences", ({ auth, status }) => {})
-// .post("me/join-code/regenerate", ({ auth, status }) => {})
-// .delete("me", ({ auth, status }) => {})
 // .delete("me/members/:userId", ({ auth, status, params }) => {});
 // TODO: /v1/rpkm/houses/stats and /v1/rpkm/houses/confirm

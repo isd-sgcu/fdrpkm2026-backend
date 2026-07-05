@@ -21,6 +21,8 @@ export const AppErrorCode = {
   NOT_FOUND: "NOT_FOUND",
   /** 403: user is not a freshmen, cannot access resource. */
   NOT_FRESHMEN: "NOT_FRESHMEN",
+  /** 403: action requires being the group's leader. */
+  NOT_LEADER: "NOT_LEADER",
   /** 400: PDPA consent is required but was not given. */
   PDPA_REQUIRED: "PDPA_REQUIRED",
   /** 401: request lacks valid authentication credentials. */
