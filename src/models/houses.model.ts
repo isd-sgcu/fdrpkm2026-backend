@@ -17,6 +17,9 @@ export const HousesModel = new Elysia().model({
   house,
   houseId: t.Object({
     id: t.String({ format: "uuid", title: "House ID" })
+  }),
+  confirmResponse: t.Object({
+    confirmedAt: t.Date({ title: "Confirmed At" })
   })
 });
 // No self-prefix — the consuming route applies its own namespace, same

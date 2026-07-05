@@ -25,6 +25,8 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
               return status(409, errorResponse("GROUP_FULL"));
             case "LEADER_HAS_MEMBERS":
               return status(409, errorResponse("LEADER_HAS_MEMBERS"));
+            case "ALREADY_CONFIRMED":
+              return status(409, errorResponse("ALREADY_CONFIRMED"));
             default:
               return status(404, errorResponse("NOT_FOUND"));
           }
@@ -40,7 +42,11 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_FRESHMEN"),
         404: t.Union([tErrorResponse("INVALID_JOIN_CODE"), tErrorResponse("NOT_FOUND")]),
-        409: t.Union([tErrorResponse("GROUP_FULL"), tErrorResponse("LEADER_HAS_MEMBERS")])
+        409: t.Union([
+          tErrorResponse("GROUP_FULL"),
+          tErrorResponse("LEADER_HAS_MEMBERS"),
+          tErrorResponse("ALREADY_CONFIRMED")
+        ])
       }
     }
   )
@@ -74,6 +80,8 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
           switch (err.code) {
             case "NOT_LEADER":
               return status(403, errorResponse("NOT_LEADER"));
+            case "ALREADY_CONFIRMED":
+              return status(409, errorResponse("ALREADY_CONFIRMED"));
             default:
               return status(404, errorResponse("NOT_FOUND"));
           }
@@ -87,7 +95,8 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
         200: tSuccessResponse(t.Ref("Groups.JoinCodeResponse")),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_LEADER"),
-        404: tErrorResponse("NOT_FOUND")
+        404: tErrorResponse("NOT_FOUND"),
+        409: tErrorResponse("ALREADY_CONFIRMED")
       }
     }
   )
@@ -151,8 +160,14 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       try {
         return successResponse(await GroupsService.leave(studentId));
       } catch (err) {
-        if (err instanceof GroupsService.GroupsServiceError)
-          return status(404, errorResponse("NOT_FOUND"));
+        if (err instanceof GroupsService.GroupsServiceError) {
+          switch (err.code) {
+            case "ALREADY_CONFIRMED":
+              return status(409, errorResponse("ALREADY_CONFIRMED"));
+            default:
+              return status(404, errorResponse("NOT_FOUND"));
+          }
+        }
         throw err;
       }
     },
@@ -161,7 +176,8 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       response: {
         200: tSuccessResponse(t.Ref("Groups.GroupWithMembers")),
         401: tErrorResponse("UNAUTHORIZED"),
-        404: tErrorResponse("NOT_FOUND")
+        404: tErrorResponse("NOT_FOUND"),
+        409: tErrorResponse("ALREADY_CONFIRMED")
       }
     }
   )
@@ -177,6 +193,8 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
               return status(403, errorResponse("NOT_LEADER"));
             case "BAD_REQUEST":
               return status(400, errorResponse("BAD_REQUEST"));
+            case "ALREADY_CONFIRMED":
+              return status(409, errorResponse("ALREADY_CONFIRMED"));
             default:
               return status(404, errorResponse("NOT_FOUND"));
           }
@@ -192,7 +210,8 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
         400: tErrorResponse("BAD_REQUEST"),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_LEADER"),
-        404: tErrorResponse("NOT_FOUND")
+        404: tErrorResponse("NOT_FOUND"),
+        409: tErrorResponse("ALREADY_CONFIRMED")
       }
     }
   );

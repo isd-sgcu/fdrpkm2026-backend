@@ -133,7 +133,7 @@ const generateJoinCode = async (): Promise<string> => {
  * Move the caller from their current group into the group identified by `joinCode`.
  * @param studentId CUNET id of the student joining (from authMiddleware)
  * @param joinCode 6-digit code identifying the target group
- * @throws {GroupsServiceError} NOT_FRESHMEN, INVALID_JOIN_CODE, LEADER_HAS_MEMBERS, or GROUP_FULL
+ * @throws {GroupsServiceError} NOT_FRESHMEN, INVALID_JOIN_CODE, LEADER_HAS_MEMBERS, GROUP_FULL, or ALREADY_CONFIRMED
  */
 const join = async (studentId: string, joinCode: string): Promise<GroupWithMembers> => {
   if (!isFreshman(studentId)) throw new GroupsServiceError("NOT_FRESHMEN");
@@ -141,12 +141,14 @@ const join = async (studentId: string, joinCode: string): Promise<GroupWithMembe
 
   const [targetGroup] = await db.select().from(groups).where(eq(groups.joinCode, joinCode));
   if (!targetGroup) throw new GroupsServiceError("INVALID_JOIN_CODE");
+  if (targetGroup.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
 
   const registration = await getCurrentRegistration(student.id);
   const oldGroupId = registration.groupId;
 
   if (oldGroupId) {
     const [oldGroup] = await db.select().from(groups).where(eq(groups.id, oldGroupId));
+    if (oldGroup?.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
     if (oldGroup && oldGroup.leaderId === student.id) {
       const oldMembers = await getGroupMembers(oldGroup);
       // a solo leader (no one else yet) may still hop groups; only blocked once someone's joined them.
@@ -209,8 +211,8 @@ const getHousePreferences = async (
  * @param studentId CUNET id (from authMiddleware)
  * @param houseIds ranked house ids, most preferred first (rank = index + 1)
  * @throws {GroupsServiceError} NOT_FOUND if the student/group/a houseId can't be resolved,
- *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the group's house is already
- *   assigned, BAD_REQUEST if houseIds has duplicates
+ *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the group is already
+ *   confirmed, BAD_REQUEST if houseIds has duplicates
  */
 const setHousePreferences = async (
   studentId: string,
@@ -218,7 +220,7 @@ const setHousePreferences = async (
 ): Promise<{ housePreferences: GroupHouseChoice[] }> => {
   const { student, group } = await getCurrentGroup(studentId);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
-  if (group.assignedHouseId) throw new GroupsServiceError("HOUSE_PICK_CLOSED");
+  if (group.confirmedAt) throw new GroupsServiceError("HOUSE_PICK_CLOSED");
   if (new Set(houseIds).size !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
 
   const existingHouses = await db.select().from(houses).where(inArray(houses.id, houseIds));
@@ -240,11 +242,13 @@ const setHousePreferences = async (
  * Regenerate the caller's group's join code. Leader-only.
  * @param studentId CUNET id (from authMiddleware)
  * @returns the new join code
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved, NOT_LEADER if not the group's leader
+ * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved,
+ *   NOT_LEADER if not the group's leader, ALREADY_CONFIRMED if the group is already confirmed
  */
 const regenerateJoinCode = async (studentId: string): Promise<string> => {
   const { student, group } = await getCurrentGroup(studentId);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
+  if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
 
   const joinCode = await generateJoinCode();
   await db.update(groups).set({ joinCode }).where(eq(groups.id, group.id));
@@ -257,10 +261,12 @@ const regenerateJoinCode = async (studentId: string): Promise<string> => {
  * member also gets their own fresh solo group.
  * @param studentId CUNET id of the student leaving (from authMiddleware)
  * @returns the caller's new solo group
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
+ * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved,
+ *   ALREADY_CONFIRMED if the group is already confirmed
  */
 const leave = async (studentId: string): Promise<GroupWithMembers> => {
   const { student, registration, group: oldGroup } = await getCurrentGroup(studentId);
+  if (oldGroup.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
 
   const isLeader = oldGroup.leaderId === student.id;
   const oldMembers = await getGroupMembers(oldGroup);
@@ -303,12 +309,13 @@ const leave = async (studentId: string): Promise<GroupWithMembers> => {
  * @param studentId CUNET id of the leader (from authMiddleware)
  * @param targetUserId `students.id` (uuid) of the member to kick
  * @throws {GroupsServiceError} NOT_FOUND if the student, group, or target member can't be
- *   resolved; NOT_LEADER if the caller isn't the group's leader; BAD_REQUEST if the caller
- *   targets themselves (use leave instead)
+ *   resolved; NOT_LEADER if the caller isn't the group's leader; ALREADY_CONFIRMED if the
+ *   group is already confirmed; BAD_REQUEST if the caller targets themselves (use leave instead)
  */
 const kickMember = async (studentId: string, targetUserId: string): Promise<GroupWithMembers> => {
   const { student, group } = await getCurrentGroup(studentId);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
+  if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
   if (targetUserId === student.id) throw new GroupsServiceError("BAD_REQUEST");
 
   const [targetRegistration] = await db
@@ -338,9 +345,34 @@ const kickMember = async (studentId: string, targetUserId: string): Promise<Grou
   return getGroupWithMembers(group);
 };
 
+/**
+ * Confirm the caller's group (POST /rpkm/houses/confirm). Leader-only;
+ * requires all 5 ranked house preferences to already be set. Locks
+ * house-preferences and membership changes for the group afterward.
+ * @param studentId CUNET id (from authMiddleware)
+ * @throws {GroupsServiceError} NOT_FRESHMEN, NOT_FOUND if the student or their group can't
+ *   be resolved, NOT_LEADER, ALREADY_CONFIRMED, or HOUSE_PREF_INCOMPLETE
+ */
+const confirmGroup = async (studentId: string): Promise<{ confirmedAt: Date }> => {
+  if (!isFreshman(studentId)) throw new GroupsServiceError("NOT_FRESHMEN");
+  const { student, group } = await getCurrentGroup(studentId);
+  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
+  if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
+
+  const preferences = await db
+    .select()
+    .from(groupHouseChoices)
+    .where(eq(groupHouseChoices.groupId, group.id));
+  if (preferences.length < 5) throw new GroupsServiceError("HOUSE_PREF_INCOMPLETE");
+
+  const confirmedAt = new Date();
+  await db.update(groups).set({ confirmedAt }).where(eq(groups.id, group.id));
+  return { confirmedAt };
+};
+
 // Namespace object — routes call `GroupsService.<fn>(...)` instead of
 // importing individual functions. Order matches the routes in
-// src/routes/rpkm/groups.ts.
+// src/routes/rpkm/groups.ts, plus confirmGroup for POST /rpkm/houses/confirm.
 export const GroupsService = {
   GroupsServiceError,
   join,
@@ -350,6 +382,7 @@ export const GroupsService = {
   regenerateJoinCode,
   leave,
   kickMember,
+  confirmGroup,
   isFreshman,
   resolveCurrentStudent
 };
