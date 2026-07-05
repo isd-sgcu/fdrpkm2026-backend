@@ -9,8 +9,14 @@ export const AppErrorCode = {
   BAD_REQUEST: "BAD_REQUEST",
   /** 403: authenticated but not allowed to access resource. */
   FORBIDDEN: "FORBIDDEN",
+  /** 409: target group already has the max number of members (4). */
+  GROUP_FULL: "GROUP_FULL",
   /** 500: unexpected server-side error, request could not be fulfilled. */
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
+  /** 404: join code does not match any group. */
+  INVALID_JOIN_CODE: "INVALID_JOIN_CODE",
+  /** 409: a leader with other members in their group can't join another group. */
+  LEADER_HAS_MEMBERS: "LEADER_HAS_MEMBERS",
   /** 404: requested resource does not exist. */
   NOT_FOUND: "NOT_FOUND",
   /** 403: user is not a freshmen, cannot access resource. */

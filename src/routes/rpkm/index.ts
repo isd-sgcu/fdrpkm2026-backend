@@ -3,6 +3,7 @@ import { authMiddleware } from "@src/routes/auth";
 import { HousesModel } from "@src/models/houses.model";
 import { RpkmService } from "@src/services/rpkm.service";
 import { errorResponse, tErrorResponse } from "@src/utils";
+import { groupRoute } from "./groups";
 
 /**
  * RPKM-only routes. project context = 'rpkm'.
@@ -12,6 +13,7 @@ export const rpkmRoutes = new Elysia({ prefix: "/rpkm" })
   .use(authMiddleware)
   .use(HousesModel)
   .prefix("model", "Rpkm.")
+  .use(groupRoute)
   .get("/", () => ({ project: "rpkm" }), { auth: true })
   // Real Drizzle + Elysia integration example (elysiajs.com/integrations/drizzle):
   // `house`/`houseId` schemas come from HousesModel, which builds them from
