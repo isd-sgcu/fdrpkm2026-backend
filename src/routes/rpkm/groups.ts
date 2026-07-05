@@ -110,8 +110,38 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
         404: tErrorResponse("NOT_FOUND")
       }
     }
+  )
+  .delete(
+    "me/members/:userId",
+    async ({ studentId, status, params }) => {
+      try {
+        return successResponse(await GroupsService.kickMember(studentId, params.userId));
+      } catch (err) {
+        if (err instanceof GroupsService.GroupsServiceError) {
+          switch (err.code) {
+            case "NOT_LEADER":
+              return status(403, errorResponse("NOT_LEADER"));
+            case "BAD_REQUEST":
+              return status(400, errorResponse("BAD_REQUEST"));
+            default:
+              return status(404, errorResponse("NOT_FOUND"));
+          }
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      params: "Groups.MemberParams",
+      response: {
+        200: tSuccessResponse(t.Ref("Groups.GroupWithMembers")),
+        400: tErrorResponse("BAD_REQUEST"),
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_LEADER"),
+        404: tErrorResponse("NOT_FOUND")
+      }
+    }
   );
 // .get("me/house-preferences", ({ auth, status }) => {})
 // .put("me/house-preferences", ({ auth, status }) => {})
-// .delete("me/members/:userId", ({ auth, status, params }) => {});
 // TODO: /v1/rpkm/houses/stats and /v1/rpkm/houses/confirm

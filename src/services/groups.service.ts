@@ -229,6 +229,46 @@ const regenerateJoinCode = async (studentId: string): Promise<string> => {
   return joinCode;
 };
 
+/**
+ * Kick a member out of the caller's group into their own fresh solo group. Leader-only.
+ * @param studentId CUNET id of the leader (from authMiddleware)
+ * @param targetUserId `students.id` (uuid) of the member to kick
+ * @throws {GroupsServiceError} NOT_FOUND if the student, group, or target member can't be
+ *   resolved; NOT_LEADER if the caller isn't the group's leader; BAD_REQUEST if the caller
+ *   targets themselves (use leave instead)
+ */
+const kickMember = async (studentId: string, targetUserId: string): Promise<GroupWithMembers> => {
+  const { student, group } = await getCurrentGroup(studentId);
+  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
+  if (targetUserId === student.id) throw new GroupsServiceError("BAD_REQUEST");
+
+  const [targetRegistration] = await db
+    .select()
+    .from(registrations)
+    .where(
+      and(
+        eq(registrations.studentId, targetUserId),
+        eq(registrations.project, "rpkm"),
+        eq(registrations.groupId, group.id)
+      )
+    );
+  if (!targetRegistration) throw new GroupsServiceError("NOT_FOUND");
+
+  await db.transaction(async (tx) => {
+    const joinCode = await generateJoinCode();
+    const [newGroup] = await tx
+      .insert(groups)
+      .values({ leaderId: targetUserId, joinCode })
+      .returning();
+    await tx
+      .update(registrations)
+      .set({ groupId: newGroup.id })
+      .where(eq(registrations.id, targetRegistration.id));
+  });
+
+  return getGroupWithMembers(group);
+};
+
 export const GroupsService = {
   GroupsServiceError,
   isFreshman,
@@ -236,5 +276,6 @@ export const GroupsService = {
   getMyGroup,
   join,
   leave,
-  regenerateJoinCode
+  regenerateJoinCode,
+  kickMember
 };
