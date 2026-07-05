@@ -12,9 +12,9 @@ const groupHouseChoice = t.Object(spread(_groupHouseChoice));
 
 const joinCode = t.String({
   title: "Join Code",
-  description: "6-digit code used to join a group",
-  pattern: "^[0-9]{6}$",
-  example: "123456"
+  description: "6-character code (uppercase letters + digits) used to join a group",
+  pattern: "^[A-Z0-9]{6}$",
+  example: "A1B2C3"
 });
 
 const groupMember = t.Object({

@@ -107,13 +107,19 @@ const getMyGroup = async (studentId: string): Promise<GroupWithMembers> => {
   return getGroupWithMembers(group);
 };
 
+const JOIN_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const JOIN_CODE_LENGTH = 6;
+
 /**
- * A random unused 6-digit join code (see groups.model.ts's joinCode pattern).
+ * A random unused 6-character join code, uppercase letters + digits (see groups.model.ts's joinCode pattern).
  * @throws {GroupsServiceError} INTERNAL_SERVER_ERROR if no unused code is found after 10 tries
  */
 const generateJoinCode = async (): Promise<string> => {
   for (let i = 0; i < 10; i++) {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    let code = "";
+    for (let j = 0; j < JOIN_CODE_LENGTH; j++)
+      code += JOIN_CODE_CHARS[Math.floor(Math.random() * JOIN_CODE_CHARS.length)];
+
     const [existing] = await db.select().from(groups).where(eq(groups.joinCode, code));
     if (!existing) return code;
   }
