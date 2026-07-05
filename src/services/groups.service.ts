@@ -1,7 +1,16 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@src/db";
-import { groups, registrations, students, type Group, type Student } from "@src/db/schema";
+import {
+  groupHouseChoices,
+  groups,
+  houses,
+  registrations,
+  students,
+  type Group,
+  type GroupHouseChoice,
+  type Student
+} from "@src/db/schema";
 import type { AppErrorCode } from "@src/utils";
 
 type GroupMember = {
@@ -19,6 +28,8 @@ class GroupsServiceError extends Error {
     super(code);
   }
 }
+
+// --- Helpers (private) ---
 
 /**
  * Whether a CUNET id belongs to a year-one (freshman) student.
@@ -97,16 +108,6 @@ const getCurrentGroup = async (studentId: string) => {
   return { student, registration, group };
 };
 
-/**
- * Current group + members for the logged-in student.
- * @param studentId CUNET id (from authMiddleware)
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
- */
-const getMyGroup = async (studentId: string): Promise<GroupWithMembers> => {
-  const { group } = await getCurrentGroup(studentId);
-  return getGroupWithMembers(group);
-};
-
 const JOIN_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const JOIN_CODE_LENGTH = 6;
 
@@ -125,6 +126,8 @@ const generateJoinCode = async (): Promise<string> => {
   }
   throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
 };
+
+// --- Public API (same order as the routes in src/routes/rpkm/groups.ts) ---
 
 /**
  * Move the caller from their current group into the group identified by `joinCode`.
@@ -171,6 +174,81 @@ const join = async (studentId: string, joinCode: string): Promise<GroupWithMembe
   });
 
   return getGroupWithMembers(targetGroup);
+};
+
+/**
+ * Current group + members for the logged-in student.
+ * @param studentId CUNET id (from authMiddleware)
+ * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
+ */
+const getMyGroup = async (studentId: string): Promise<GroupWithMembers> => {
+  const { group } = await getCurrentGroup(studentId);
+  return getGroupWithMembers(group);
+};
+
+/**
+ * The caller's group's ranked house choices, most preferred (rank 1) first.
+ * @param studentId CUNET id (from authMiddleware)
+ * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
+ */
+const getHousePreferences = async (
+  studentId: string
+): Promise<{ housePreferences: GroupHouseChoice[] }> => {
+  const { group } = await getCurrentGroup(studentId);
+  const housePreferences = await db
+    .select()
+    .from(groupHouseChoices)
+    .where(eq(groupHouseChoices.groupId, group.id))
+    .orderBy(asc(groupHouseChoices.rank));
+
+  return { housePreferences };
+};
+
+/**
+ * Replace the caller's group's whole ranked house-choice set. Leader-only.
+ * @param studentId CUNET id (from authMiddleware)
+ * @param houseIds ranked house ids, most preferred first (rank = index + 1)
+ * @throws {GroupsServiceError} NOT_FOUND if the student/group/a houseId can't be resolved,
+ *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the group's house is already
+ *   assigned, BAD_REQUEST if houseIds has duplicates
+ */
+const setHousePreferences = async (
+  studentId: string,
+  houseIds: string[]
+): Promise<{ housePreferences: GroupHouseChoice[] }> => {
+  const { student, group } = await getCurrentGroup(studentId);
+  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
+  if (group.assignedHouseId) throw new GroupsServiceError("HOUSE_PICK_CLOSED");
+  if (new Set(houseIds).size !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
+
+  const existingHouses = await db.select().from(houses).where(inArray(houses.id, houseIds));
+  if (existingHouses.length !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
+
+  return db.transaction(async (tx) => {
+    await tx.delete(groupHouseChoices).where(eq(groupHouseChoices.groupId, group.id));
+
+    const housePreferences = await tx
+      .insert(groupHouseChoices)
+      .values(houseIds.map((houseId, index) => ({ groupId: group.id, houseId, rank: index + 1 })))
+      .returning();
+
+    return { housePreferences };
+  });
+};
+
+/**
+ * Regenerate the caller's group's join code. Leader-only.
+ * @param studentId CUNET id (from authMiddleware)
+ * @returns the new join code
+ * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved, NOT_LEADER if not the group's leader
+ */
+const regenerateJoinCode = async (studentId: string): Promise<string> => {
+  const { student, group } = await getCurrentGroup(studentId);
+  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
+
+  const joinCode = await generateJoinCode();
+  await db.update(groups).set({ joinCode }).where(eq(groups.id, group.id));
+  return joinCode;
 };
 
 /**
@@ -221,21 +299,6 @@ const leave = async (studentId: string): Promise<GroupWithMembers> => {
 };
 
 /**
- * Regenerate the caller's group's join code. Leader-only.
- * @param studentId CUNET id (from authMiddleware)
- * @returns the new join code
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved, NOT_LEADER if not the group's leader
- */
-const regenerateJoinCode = async (studentId: string): Promise<string> => {
-  const { student, group } = await getCurrentGroup(studentId);
-  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
-
-  const joinCode = await generateJoinCode();
-  await db.update(groups).set({ joinCode }).where(eq(groups.id, group.id));
-  return joinCode;
-};
-
-/**
  * Kick a member out of the caller's group into their own fresh solo group. Leader-only.
  * @param studentId CUNET id of the leader (from authMiddleware)
  * @param targetUserId `students.id` (uuid) of the member to kick
@@ -275,13 +338,18 @@ const kickMember = async (studentId: string, targetUserId: string): Promise<Grou
   return getGroupWithMembers(group);
 };
 
+// Namespace object — routes call `GroupsService.<fn>(...)` instead of
+// importing individual functions. Order matches the routes in
+// src/routes/rpkm/groups.ts.
 export const GroupsService = {
   GroupsServiceError,
-  isFreshman,
-  resolveCurrentStudent,
-  getMyGroup,
   join,
-  leave,
+  getMyGroup,
+  getHousePreferences,
+  setHousePreferences,
   regenerateJoinCode,
-  kickMember
+  leave,
+  kickMember,
+  isFreshman,
+  resolveCurrentStudent
 };

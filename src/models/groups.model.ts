@@ -50,6 +50,9 @@ export const GroupsModel = new Elysia().model({
       maxItems: 5
     })
   }),
+  housePreferencesResponse: t.Object({
+    housePreferences: t.Array(groupHouseChoice)
+  }),
   memberParams: t.Object({
     userId: t.String({ format: "uuid", title: "Student ID" })
   })

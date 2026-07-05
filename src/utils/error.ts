@@ -11,6 +11,8 @@ export const AppErrorCode = {
   FORBIDDEN: "FORBIDDEN",
   /** 409: target group already has the max number of members (4). */
   GROUP_FULL: "GROUP_FULL",
+  /** 409: group's house is already assigned — house preferences can no longer be changed. */
+  HOUSE_PICK_CLOSED: "HOUSE_PICK_CLOSED",
   /** 500: unexpected server-side error, request could not be fulfilled. */
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
   /** 404: join code does not match any group. */

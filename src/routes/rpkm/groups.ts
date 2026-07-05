@@ -91,6 +91,60 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       }
     }
   )
+  .get(
+    "me/house-preferences",
+    async ({ studentId, status }) => {
+      try {
+        return successResponse(await GroupsService.getHousePreferences(studentId));
+      } catch (err) {
+        if (err instanceof GroupsService.GroupsServiceError)
+          return status(404, errorResponse("NOT_FOUND"));
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      response: {
+        200: tSuccessResponse(t.Ref("Groups.HousePreferencesResponse")),
+        401: tErrorResponse("UNAUTHORIZED"),
+        404: tErrorResponse("NOT_FOUND")
+      }
+    }
+  )
+  .put(
+    "me/house-preferences",
+    async ({ studentId, status, body }) => {
+      try {
+        return successResponse(await GroupsService.setHousePreferences(studentId, body.houseIds));
+      } catch (err) {
+        if (err instanceof GroupsService.GroupsServiceError) {
+          switch (err.code) {
+            case "NOT_LEADER":
+              return status(403, errorResponse("NOT_LEADER"));
+            case "BAD_REQUEST":
+              return status(400, errorResponse("BAD_REQUEST"));
+            case "HOUSE_PICK_CLOSED":
+              return status(409, errorResponse("HOUSE_PICK_CLOSED"));
+            default:
+              return status(404, errorResponse("NOT_FOUND"));
+          }
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      body: "Groups.HousePreferencesBody",
+      response: {
+        200: tSuccessResponse(t.Ref("Groups.HousePreferencesResponse")),
+        400: tErrorResponse("BAD_REQUEST"),
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_LEADER"),
+        404: tErrorResponse("NOT_FOUND"),
+        409: tErrorResponse("HOUSE_PICK_CLOSED")
+      }
+    }
+  )
   .delete(
     "me",
     async ({ studentId, status }) => {
@@ -142,6 +196,3 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       }
     }
   );
-// .get("me/house-preferences", ({ auth, status }) => {})
-// .put("me/house-preferences", ({ auth, status }) => {})
-// TODO: /v1/rpkm/houses/stats and /v1/rpkm/houses/confirm
