@@ -154,6 +154,9 @@ const join = async (studentId: string, joinCode: string): Promise<GroupWithMembe
   const registration = await getCurrentRegistration(student.id);
   const oldGroupId = registration.groupId;
 
+  // already in this group — no-op success, skip leader/capacity checks and the write entirely.
+  if (oldGroupId === targetGroup.id) return getGroupWithMembers(targetGroup);
+
   if (oldGroupId) {
     const [oldGroup] = await db.select().from(groups).where(eq(groups.id, oldGroupId));
     if (oldGroup?.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
