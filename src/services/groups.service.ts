@@ -112,17 +112,24 @@ const getCurrentGroup = async (studentId: string) => {
 const JOIN_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const JOIN_CODE_LENGTH = 6;
 
+// `db` itself, or the `tx` a transaction callback receives — accepting either
+// lets generateJoinCode be called from inside db.transaction(...) without
+// opening a second connection (which can deadlock the pool).
+type DbClient = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+
 /**
  * A random unused 6-character join code, uppercase letters + digits (see groups.model.ts's joinCode pattern).
+ * @param client `db` or an in-progress transaction's `tx` — pass `tx` when calling from
+ *   inside `db.transaction(...)` so this doesn't open a second connection and deadlock the pool.
  * @throws {GroupsServiceError} INTERNAL_SERVER_ERROR if no unused code is found after 10 tries
  */
-const generateJoinCode = async (): Promise<string> => {
+const generateJoinCode = async (client: DbClient = db): Promise<string> => {
   for (let i = 0; i < 10; i++) {
     let code = "";
     for (let j = 0; j < JOIN_CODE_LENGTH; j++)
       code += JOIN_CODE_CHARS[Math.floor(Math.random() * JOIN_CODE_CHARS.length)];
 
-    const [existing] = await db.select().from(groups).where(eq(groups.joinCode, code));
+    const [existing] = await client.select().from(groups).where(eq(groups.joinCode, code));
     if (!existing) return code;
   }
   throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
@@ -273,9 +280,9 @@ const leave = async (studentId: string): Promise<GroupWithMembers> => {
   const isLeader = oldGroup.leaderId === student.id;
   const oldMembers = await getGroupMembers(oldGroup);
 
-  return db.transaction(async (tx) => {
+  const newGroup = await db.transaction(async (tx) => {
     const createSoloGroup = async (leaderId: string) => {
-      const joinCode = await generateJoinCode();
+      const joinCode = await generateJoinCode(tx);
       const [group] = await tx.insert(groups).values({ leaderId, joinCode }).returning();
       return group;
     };
@@ -302,8 +309,11 @@ const leave = async (studentId: string): Promise<GroupWithMembers> => {
     }
     // else: a non-leader member just leaves — the old group keeps its remaining members.
 
-    return getGroupWithMembers(newGroup);
+    return newGroup;
   });
+
+  // read-only, doesn't need to be inside the transaction.
+  return getGroupWithMembers(newGroup);
 };
 
 /**
@@ -333,7 +343,7 @@ const kickMember = async (studentId: string, targetUserId: string): Promise<Grou
   if (!targetRegistration) throw new GroupsServiceError("NOT_FOUND");
 
   await db.transaction(async (tx) => {
-    const joinCode = await generateJoinCode();
+    const joinCode = await generateJoinCode(tx);
     const [newGroup] = await tx
       .insert(groups)
       .values({ leaderId: targetUserId, joinCode })
