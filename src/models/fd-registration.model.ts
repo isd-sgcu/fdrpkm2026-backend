@@ -1,16 +1,15 @@
 import { Elysia, t } from "elysia";
 
-import { vehicleEnum } from "@src/db/schema";
+import { prefixEnum, vehicleEnum } from "@src/db/schema";
 import { tSuccessResponse } from "@src/utils";
 
 /**
  * DTOs for the FirstDate registration flow (POST /v1/fd/users/register,
- * GET /v1/fd/users/me). Schema-only (see docs/mvc.md). Same field shapes as
- * the RPKM model but with NO group — FirstDate has no groups (group_id stays
- * null). camelCase, consistent with the rest of the API.
+ * GET /v1/fd/users/me). Schema-only (see docs/mvc.md). Same field shapes as the
+ * RPKM model but with NO group — FirstDate has no groups (group_id stays null).
  *
- * The schemas are intentionally duplicated (not imported from the RPKM model):
- * sharing one t.* node across two Elysia model instances risks Elysia's
+ * Schemas are intentionally duplicated (not imported from the RPKM model):
+ * sharing one t.* node across two Elysia model instances risks the
  * `.prefix("model", …)` deep-clone collapsing a static type to `never`. The
  * shared *logic* lives in the registration core service, not here.
  *
@@ -18,15 +17,11 @@ import { tSuccessResponse } from "@src/utils";
  * `.use(FdRegistrationModel).prefix("model", "FdUser.")`.
  */
 
-// t.Enum (not t.Union over a mapped array, which resolves to `never` under the
-// prefix clone). Kept in sync with the DB enum.
-const vehicleValues = Object.fromEntries(vehicleEnum.enumValues.map((value) => [value, value])) as {
-  [K in (typeof vehicleEnum.enumValues)[number]]: K;
-};
-const vehicle = t.Enum(vehicleValues, {
-  title: "Vehicle",
-  description: "Travel method code; 'other' requires vehicleOther."
-});
+const enumSchema = <T extends readonly string[]>(values: T, title: string) =>
+  t.Enum(Object.fromEntries(values.map((v) => [v, v])) as { [K in T[number]]: K }, { title });
+
+const vehicle = enumSchema(vehicleEnum.enumValues, "Vehicle");
+const prefix = enumSchema(prefixEnum.enumValues, "Prefix");
 
 const travelLegInput = t.Object({
   vehicle,
@@ -37,12 +32,23 @@ const travelLegInput = t.Object({
   destinationProvince: t.Optional(t.String({ title: "Destination province" }))
 });
 
-// travel_legs is capped at 2 by the DB (CHECK seq in (1,2)).
+// travelLegs: 1..4 (DB CHECK seq in (1,2,3,4)).
 const registrationBody = t.Object({
   pdpaConsent: t.Boolean({ title: "PDPA consent", description: "Must be true to register." }),
+  firstName: t.Optional(t.String({ title: "First name" })),
+  lastName: t.Optional(t.String({ title: "Last name" })),
+  prefix: t.Optional(prefix),
+  nickname: t.Optional(t.Nullable(t.String())),
+  faculty: t.Optional(t.Nullable(t.String())),
+  phone: t.Optional(t.Nullable(t.String())),
+  emergencyContactName: t.Optional(t.Nullable(t.String())),
+  emergencyContactPhone: t.Optional(t.Nullable(t.String())),
+  allergies: t.Optional(t.Nullable(t.String())),
+  dietary: t.Optional(t.Nullable(t.String())),
+  medicalNotes: t.Optional(t.Nullable(t.String())),
   pnoSgcuAwareness: t.Optional(t.Nullable(t.String())),
   pnoReferralSource: t.Optional(t.Nullable(t.String())),
-  travelLegs: t.Optional(t.Array(travelLegInput, { maxItems: 2, title: "Travel legs" }))
+  travelLegs: t.Array(travelLegInput, { minItems: 1, maxItems: 4, title: "Travel legs" })
 });
 
 const registrationResult = t.Object({
@@ -51,17 +57,25 @@ const registrationResult = t.Object({
 });
 
 const meUser = t.Object({
-  // students uuid once registered; null before the students row exists.
   id: t.Nullable(t.String()),
   studentCode: t.String(),
+  prefix: t.Nullable(t.String()),
   firstName: t.String(),
   lastName: t.String(),
-  year: t.Nullable(t.String())
+  nickname: t.Nullable(t.String()),
+  faculty: t.Nullable(t.String()),
+  year: t.Nullable(t.String()),
+  phone: t.Nullable(t.String()),
+  emergencyContactName: t.Nullable(t.String()),
+  emergencyContactPhone: t.Nullable(t.String()),
+  allergies: t.Nullable(t.String()),
+  dietary: t.Nullable(t.String()),
+  medicalNotes: t.Nullable(t.String()),
+  pnoSgcuAwareness: t.Nullable(t.String())
 });
 
 const meRegistration = t.Object({
   pdpaConsent: t.Boolean(),
-  pnoSgcuAwareness: t.Nullable(t.String()),
   pnoReferralSource: t.Nullable(t.String())
 });
 
@@ -75,7 +89,6 @@ const travelLegView = t.Object({
   destinationProvince: t.String()
 });
 
-// Stable shape for prefill (registration null + travelLegs [] when unregistered).
 const meResult = t.Object({
   user: meUser,
   registration: t.Nullable(meRegistration),

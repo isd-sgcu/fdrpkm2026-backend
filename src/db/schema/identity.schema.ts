@@ -61,7 +61,7 @@ export const registrations = t.pgTable(
   ]
 );
 
-// carbon: up to 2 legs per registration. no distance stored, just the choices.
+// carbon: 1..4 legs per registration. no distance stored, just the choices.
 // top-of-form origin question maps to leg 1's origin_district.
 export const travelLegs = t.pgTable(
   "travel_legs",
@@ -84,7 +84,7 @@ export const travelLegs = t.pgTable(
   (table) => [
     t.unique("travel_legs_registration_seq_unique").on(table.registrationId, table.seq),
     t.index("travel_legs_registration_id_idx").on(table.registrationId),
-    t.check("travel_legs_seq_check", sql`${table.seq} in (1, 2)`),
+    t.check("travel_legs_seq_check", sql`${table.seq} in (1, 2, 3, 4)`),
     // vehicle_other required iff vehicle = 'other'.
     t.check(
       "travel_legs_vehicle_other_check",

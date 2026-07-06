@@ -143,19 +143,24 @@ describe("travel_legs", () => {
     destinationProvince: "bangkok"
   });
 
-  it("accepts legs 1 and 2", async () => {
+  it("accepts legs 1 through 4", async () => {
     const registrationId = await makeRegistration();
     const rows = await db
       .insert(schema.travelLegs)
-      .values([leg(registrationId, 1), leg(registrationId, 2)])
+      .values([
+        leg(registrationId, 1),
+        leg(registrationId, 2),
+        leg(registrationId, 3),
+        leg(registrationId, 4)
+      ])
       .returning();
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(4);
   });
 
-  it("rejects seq outside 1..2 (CHECK)", async () => {
+  it("rejects seq outside 1..4 (CHECK)", async () => {
     const registrationId = await makeRegistration();
     await rejects(() => db.insert(schema.travelLegs).values(leg(registrationId, 0)));
-    await rejects(() => db.insert(schema.travelLegs).values(leg(registrationId, 3)));
+    await rejects(() => db.insert(schema.travelLegs).values(leg(registrationId, 5)));
   });
 
   it("rejects two leg-1s for one registration", async () => {

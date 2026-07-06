@@ -9,10 +9,8 @@ import * as schema from "../src/db/schema";
 import { FdRegistrationService } from "../src/services/fd-registration.service";
 import { RpkmRegistrationService } from "../src/services/rpkm-registration.service";
 
-const { registerFd, getMe, FdRegistrationServiceError } = FdRegistrationService;
+const { registerFd, getMe } = FdRegistrationService;
 
-// Real Postgres (pglite, in-memory WASM) with migrations applied, exercising
-// the real constraints. The services take an injected db.
 let client: PGlite;
 let db: PgliteDatabase<typeof schema>;
 const injected = (): { db: Database } => ({ db: db as unknown as Database });
@@ -46,6 +44,12 @@ const leg = (over: Record<string, unknown> = {}) => ({
   ...over
 });
 
+const validInput = (over: Record<string, unknown> = {}) => ({
+  pdpaConsent: true,
+  travelLegs: [leg()],
+  ...over
+});
+
 beforeAll(async () => {
   client = new PGlite();
   db = drizzle(client, { schema });
@@ -62,24 +66,22 @@ beforeEach(async () => {
 
 describe("registerFd — happy path", () => {
   it("creates student + firstdate registration with NO group (group_id null)", async () => {
-    const result = await registerFd(authUser(), { pdpaConsent: true }, injected());
+    const result = await registerFd(authUser(), validInput(), injected());
 
     expect(result.userId).toMatch(/^[0-9a-f-]{36}$/);
     expect(result.registrationId).toMatch(/^[0-9a-f-]{36}$/);
-    // FD result carries no group field at all.
-    expect("group" in result).toBe(false);
+    expect("group" in result).toBe(false); // FD result carries no group field
 
     const [registration] = await db.select().from(schema.registrations);
     expect(registration.project).toBe("firstdate");
     expect(registration.groupId).toBeNull();
-    // no group rows created for FirstDate
     expect(await db.select().from(schema.groups)).toHaveLength(0);
   });
 
   it("maps pno_aware to students and pno_source to registrations", async () => {
     await registerFd(
       authUser(),
-      { pdpaConsent: true, pnoSgcuAwareness: "instagram", pnoReferralSource: "friend" },
+      validInput({ pnoSgcuAwareness: "instagram", pnoReferralSource: "friend" }),
       injected()
     );
     const [student] = await db.select().from(schema.students);
@@ -87,19 +89,32 @@ describe("registerFd — happy path", () => {
     expect(student.pnoSgcuAwareness).toBe("instagram");
     expect(registration.pnoReferralSource).toBe("friend");
   });
+
+  it("uses profile fields from the payload (not the SSO name)", async () => {
+    await registerFd(
+      authUser({ name: "Somchai Jaidee" }),
+      validInput({ firstName: "ก้อง", lastName: "ทดสอบ", prefix: "mr" }),
+      injected()
+    );
+    const [student] = await db.select().from(schema.students);
+    expect(student.firstName).toBe("ก้อง");
+    expect(student.prefix).toBe("mr");
+    expect(student.studentId).toBe("6912345678");
+  });
 });
 
 describe("registerFd — travel legs", () => {
-  it("forces the last leg's destination to Pathum Wan / Bangkok", async () => {
+  it("forces the 4th leg's destination only on a full 4-leg journey", async () => {
     const result = await registerFd(
       authUser(),
-      {
-        pdpaConsent: true,
+      validInput({
         travelLegs: [
+          leg(),
+          leg(),
           leg(),
           leg({ destinationDistrict: "Somewhere", destinationProvince: "Nowhere" })
         ]
-      },
+      }),
       injected()
     );
     const rows = await db
@@ -107,52 +122,67 @@ describe("registerFd — travel legs", () => {
       .from(schema.travelLegs)
       .where(eq(schema.travelLegs.registrationId, result.registrationId))
       .orderBy(schema.travelLegs.seq);
-    expect(rows).toHaveLength(2);
-    expect(rows[1].destinationDistrict).toBe("Pathum Wan");
-    expect(rows[1].destinationProvince).toBe("Bangkok");
+    expect(rows).toHaveLength(4);
+    expect(rows[3].destinationDistrict).toBe("Pathum Wan");
+    expect(rows[3].destinationProvince).toBe("Bangkok");
+  });
+
+  it("keeps the destination for a shorter journey", async () => {
+    const result = await registerFd(
+      authUser(),
+      validInput({ travelLegs: [leg({ destinationDistrict: "Don Mueang" })] }),
+      injected()
+    );
+    const [row] = await db
+      .select()
+      .from(schema.travelLegs)
+      .where(eq(schema.travelLegs.registrationId, result.registrationId));
+    expect(row.destinationDistrict).toBe("Don Mueang");
   });
 });
 
 describe("registerFd — validation", () => {
-  it("rejects when pdpaConsent is not true", async () => {
-    await expect(registerFd(authUser(), { pdpaConsent: false }, injected())).rejects.toThrow(
-      FdRegistrationServiceError
-    );
+  it("rejects when pdpaConsent is not true (PDPA_REQUIRED)", async () => {
+    await expect(
+      registerFd(authUser(), validInput({ pdpaConsent: false }), injected())
+    ).rejects.toMatchObject({ code: "PDPA_REQUIRED" });
     expect(await db.select().from(schema.students)).toHaveLength(0);
   });
 
-  it("rejects more than 2 travel legs", async () => {
+  it("rejects zero travel legs", async () => {
     await expect(
-      registerFd(authUser(), { pdpaConsent: true, travelLegs: [leg(), leg(), leg()] }, injected())
+      registerFd(authUser(), { pdpaConsent: true, travelLegs: [] }, injected())
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("rejects more than 4 travel legs", async () => {
+    await expect(
+      registerFd(
+        authUser(),
+        validInput({ travelLegs: [leg(), leg(), leg(), leg(), leg()] }),
+        injected()
+      )
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
 
-describe("registerFd — resubmit", () => {
-  it("preserves survey answers and legs when a resubmit omits them", async () => {
-    await registerFd(
-      authUser(),
-      { pdpaConsent: true, pnoSgcuAwareness: "instagram", travelLegs: [leg()] },
-      injected()
-    );
-    await registerFd(authUser(), { pdpaConsent: true }, injected());
-    const [student] = await db.select().from(schema.students);
-    expect(student.pnoSgcuAwareness).toBe("instagram");
-    expect(await db.select().from(schema.travelLegs)).toHaveLength(1);
+describe("registerFd — insert-only", () => {
+  it("rejects a second FirstDate registration (ALREADY_REGISTERED)", async () => {
+    await registerFd(authUser(), validInput(), injected());
+    await expect(registerFd(authUser(), validInput(), injected())).rejects.toMatchObject({
+      code: "ALREADY_REGISTERED"
+    });
+    expect(await db.select().from(schema.registrations)).toHaveLength(1);
   });
 });
 
 describe("getMe (FirstDate)", () => {
-  it("returns saved data with no group field", async () => {
-    await registerFd(
-      authUser(),
-      { pdpaConsent: true, pnoSgcuAwareness: "instagram", travelLegs: [leg()] },
-      injected()
-    );
+  it("returns saved data with pnoSgcuAwareness on user and no group field", async () => {
+    await registerFd(authUser(), validInput({ pnoSgcuAwareness: "instagram" }), injected());
     const me = await getMe(authUser(), injected());
     expect(me.user.studentCode).toBe("6912345678");
+    expect(me.user.pnoSgcuAwareness).toBe("instagram");
     expect(me.registration?.pdpaConsent).toBe(true);
-    expect(me.registration?.pnoSgcuAwareness).toBe("instagram");
     expect(me.travelLegs).toHaveLength(1);
     expect("group" in me).toBe(false);
   });
@@ -160,6 +190,7 @@ describe("getMe (FirstDate)", () => {
   it("returns a stable empty shape (id null) for a never-registered user", async () => {
     const me = await getMe(authUser(), injected());
     expect(me.user.id).toBeNull();
+    expect(me.user.pnoSgcuAwareness).toBeNull();
     expect(me.registration).toBeNull();
     expect(me.travelLegs).toEqual([]);
   });
@@ -167,20 +198,14 @@ describe("getMe (FirstDate)", () => {
 
 describe("FirstDate + RPKM share one student, separate registrations", () => {
   it("lets the same person register for both projects independently", async () => {
-    const fd = await registerFd(authUser(), { pdpaConsent: true }, injected());
-    const rpkm = await RpkmRegistrationService.registerRpkm(
-      authUser(),
-      { pdpaConsent: true },
-      injected()
-    );
+    const fd = await registerFd(authUser(), validInput(), injected());
+    const rpkm = await RpkmRegistrationService.registerRpkm(authUser(), validInput(), injected());
 
-    // one shared students row
-    expect(await db.select().from(schema.students)).toHaveLength(1);
+    expect(await db.select().from(schema.students)).toHaveLength(1); // one shared student
     expect(rpkm.userId).toBe(fd.userId);
 
-    // two registrations, one per project
     const regs = await db.select().from(schema.registrations);
-    expect(regs).toHaveLength(2);
+    expect(regs).toHaveLength(2); // one per project
 
     const [fdReg] = await db
       .select()
@@ -199,7 +224,6 @@ describe("FirstDate + RPKM share one student, separate registrations", () => {
       .where(eq(schema.registrations.id, rpkm.registrationId));
     expect(rpkmReg.groupId).toBe(rpkm.group.id); // RPKM: solo group
 
-    // exactly one group total (the RPKM one)
-    expect(await db.select().from(schema.groups)).toHaveLength(1);
+    expect(await db.select().from(schema.groups)).toHaveLength(1); // only the RPKM one
   });
 });

@@ -27,9 +27,16 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
         return successResponse(data);
       } catch (err) {
         if (err instanceof RpkmRegistrationService.RpkmRegistrationServiceError) {
-          if (err.code === "BAD_REQUEST")
-            return status(400, errorResponse("BAD_REQUEST", { message: err.message }));
-          return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
+          switch (err.code) {
+            case "PDPA_REQUIRED":
+              return status(400, errorResponse("PDPA_REQUIRED", { message: err.message }));
+            case "BAD_REQUEST":
+              return status(400, errorResponse("BAD_REQUEST", { message: err.message }));
+            case "ALREADY_REGISTERED":
+              return status(409, errorResponse("ALREADY_REGISTERED", { message: err.message }));
+            default:
+              return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
+          }
         }
         throw err;
       }
@@ -39,8 +46,12 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
       body: "RpkmUser.RegistrationBody",
       response: {
         200: "RpkmUser.RegistrationResponse",
-        400: tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
+        400: t.Union([
+          tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
+          tErrorResponse("PDPA_REQUIRED", t.Object({ message: t.String() }))
+        ]),
         401: tErrorResponse("UNAUTHORIZED"),
+        409: tErrorResponse("ALREADY_REGISTERED", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }
