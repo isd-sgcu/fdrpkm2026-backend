@@ -361,12 +361,13 @@ const kickMember = async (studentId: string, targetUserId: string): Promise<Grou
 };
 
 /**
- * Confirm the caller's group (POST /rpkm/houses/confirm). Leader-only;
- * requires all 5 ranked house preferences to already be set. Locks
- * house-preferences and membership changes for the group afterward.
+ * Confirm the caller's group (POST /rpkm/houses/confirm). Leader-only.
+ * House preferences are optional (0-5 allowed); confirmation only fails
+ * if somehow more than 5 are set. Locks house-preferences and membership
+ * changes for the group afterward.
  * @param studentId CUNET id (from authMiddleware)
  * @throws {GroupsServiceError} NOT_FRESHMEN, NOT_FOUND if the student or their group can't
- *   be resolved, NOT_LEADER, ALREADY_CONFIRMED, or HOUSE_PREF_INCOMPLETE
+ *   be resolved, NOT_LEADER, ALREADY_CONFIRMED, or TOO_MANY_HOUSE_PREFS
  */
 const confirmGroup = async (studentId: string): Promise<{ confirmedAt: Date }> => {
   if (!isFreshman(studentId)) throw new GroupsServiceError("NOT_FRESHMEN");
@@ -378,7 +379,7 @@ const confirmGroup = async (studentId: string): Promise<{ confirmedAt: Date }> =
     .select()
     .from(groupHouseChoices)
     .where(eq(groupHouseChoices.groupId, group.id));
-  if (preferences.length < 5) throw new GroupsServiceError("HOUSE_PREF_INCOMPLETE");
+  if (preferences.length > 5) throw new GroupsServiceError("TOO_MANY_HOUSE_PREFS");
 
   const confirmedAt = new Date();
   await db.update(groups).set({ confirmedAt }).where(eq(groups.id, group.id));

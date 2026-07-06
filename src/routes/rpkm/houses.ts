@@ -95,8 +95,8 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
               return status(403, errorResponse("NOT_LEADER"));
             case "ALREADY_CONFIRMED":
               return status(409, errorResponse("ALREADY_CONFIRMED"));
-            case "HOUSE_PREF_INCOMPLETE":
-              return status(400, errorResponse("HOUSE_PREF_INCOMPLETE"));
+            case "TOO_MANY_HOUSE_PREFS":
+              return status(400, errorResponse("TOO_MANY_HOUSE_PREFS"));
             default:
               return status(404, errorResponse("NOT_FOUND"));
           }
@@ -108,7 +108,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
       auth: true,
       response: {
         200: tSuccessResponse(HousesModel.models.confirmResponse.Schema()),
-        400: tErrorResponse("HOUSE_PREF_INCOMPLETE"),
+        400: tErrorResponse("TOO_MANY_HOUSE_PREFS"),
         401: tErrorResponse("UNAUTHORIZED"),
         403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("NOT_LEADER")]),
         404: tErrorResponse("NOT_FOUND"),

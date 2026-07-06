@@ -46,7 +46,7 @@ export const GroupsModel = new Elysia().model({
     houseIds: t.Array(t.String({ format: "uuid", title: "House ID" }), {
       title: "House IDs",
       description: "Ranked house IDs, most preferred first (rank = index + 1)",
-      minItems: 1,
+      minItems: 0,
       maxItems: 5
     })
   }),
