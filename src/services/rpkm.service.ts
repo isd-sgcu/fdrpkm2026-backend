@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-
+import { checkinStudent } from "@src/services/checkin.helper";
 import type { AppErrorCode } from "@src/utils";
 import { db } from "@src/db";
 import { houses, type House } from "@src/db/schema";
@@ -27,10 +27,16 @@ const getHouse = async (id: string): Promise<House> => {
   return house;
 };
 
-// Namespace object — routes call `RpkmService.<fn>(...)` instead of
-// importing individual functions. Add functions here as real logic lands.
+const checkinRegistration = (staffCunetId: string, studentCunetId: string) =>
+  checkinStudent({ studentCunetId, staffCunetId, project: "rpkm" });
+
+const checkinFreshmenNight = (staffCunetId: string, studentCunetId: string) =>
+  checkinStudent({ studentCunetId, staffCunetId, project: "freshmennight" });
+
 export const RpkmService = {
   RpkmServiceError,
   listHouses,
-  getHouse
+  getHouse,
+  checkinRegistration,
+  checkinFreshmenNight
 };
