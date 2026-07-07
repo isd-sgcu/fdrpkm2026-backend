@@ -27,15 +27,25 @@ const registrationResult = t.Object({
 });
 
 // Stable shape: registration/group null + travelLegs [] when unregistered.
-const meResult = t.Object({
+const profileResult = t.Object({
   user: f.meUser,
   registration: t.Nullable(f.meRegistration),
   travelLegs: t.Array(f.travelLegView),
   group: t.Nullable(groupView)
 });
 
+const meResult = t.Object({
+  id: t.Nullable(t.String()),
+  studentId: t.String(),
+  firstName: t.String(),
+  lastName: t.String(),
+  role: t.String(),
+  registered: t.Boolean()
+});
+
 export const RpkmRegistrationModel = new Elysia().model({
   registrationBody: f.registrationBody,
   registrationResponse: tSuccessResponse(registrationResult),
-  meResponse: tSuccessResponse(meResult)
+  meResponse: tSuccessResponse(meResult),
+  profileResponse: tSuccessResponse(profileResult)
 });

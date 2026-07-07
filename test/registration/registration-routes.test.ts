@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createApp } from "../src/app";
+import { createApp } from "../../src/app";
 
 // Route-level test for the DTO validation → 422 envelope mapping (the onError
 // handler on the registration route instances). Validation runs before the
@@ -25,7 +25,7 @@ describe("registration routes — 422 validation envelope", () => {
   });
 
   it("FirstDate: invalid body -> 422 VALIDATION", async () => {
-    const res = await post("/v1/fd/users/register", { travelLegs: [] });
+    const res = await post("/v1/fd/users/registration", { travelLegs: [] });
     expect(res.status).toBe(422);
     expect(await res.json()).toMatchObject({ success: false, error: { code: "VALIDATION" } });
   });

@@ -3,7 +3,7 @@
  */
 // Sort ALPHABETICALLY by key name, not value, so that the enum is easier to read and maintain.
 export const AppErrorCode = {
-  /** 409: already registered for this project; registration is insert-only. */
+  /** 409: user already registered for this project. */
   ALREADY_REGISTERED: "ALREADY_REGISTERED",
   /** 400: request malformed or failed validation. */
   BAD_REQUEST: "BAD_REQUEST",

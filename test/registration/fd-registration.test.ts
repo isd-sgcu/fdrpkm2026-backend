@@ -4,12 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 
-import type { Database } from "../src/db";
-import * as schema from "../src/db/schema";
-import { FdRegistrationService } from "../src/services/fd-registration.service";
-import { RpkmRegistrationService } from "../src/services/rpkm-registration.service";
+import type { Database } from "../../src/db";
+import * as schema from "../../src/db/schema";
+import { FdRegistrationService } from "../../src/services/fd-registration.service";
+import { RpkmRegistrationService } from "../../src/services/rpkm-registration.service";
 
-const { registerFd, getMe } = FdRegistrationService;
+const { registerFd, getMe, getProfile } = FdRegistrationService;
 
 let client: PGlite;
 let db: PgliteDatabase<typeof schema>;
@@ -176,26 +176,43 @@ describe("registerFd — insert-only", () => {
   });
 });
 
-describe("registerFd — freshman only", () => {
-  it("rejects a non-freshman with NOT_FRESHMEN", async () => {
-    await expect(
-      registerFd(authUser({ email: "6612345678@student.chula.ac.th" }), validInput(), injected())
-    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
-    expect(await db.select().from(schema.students)).toHaveLength(0);
+describe("registerFd — access control", () => {
+  it("allows any authenticated user to register (not only freshmen)", async () => {
+    const result = await registerFd(
+      authUser({ email: "6612345678@student.chula.ac.th" }),
+      validInput(),
+      injected()
+    );
+    expect(result.userId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await db.select().from(schema.students)).toHaveLength(1);
   });
 
-  it("getMe rejects a non-freshman with NOT_FRESHMEN", async () => {
+  it("prevent pre-seeded staff from registering", async () => {
+    // Seed a staff user
+    await db.insert(schema.students).values({
+      studentId: "staffuser",
+      email: "staffuser@student.chula.ac.th",
+      firstName: "Staff",
+      lastName: "Member",
+      role: "staff"
+    });
+
     await expect(
-      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
-    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+      registerFd(authUser({ email: "staffuser@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("allows non-freshman to call getProfile", async () => {
+    const me = await getProfile(authUser({ email: "6612345678@student.chula.ac.th" }), injected());
+    expect(me.user.id).toBeNull();
   });
 });
 
-describe("getMe (FirstDate)", () => {
+describe("getProfile (FirstDate)", () => {
   it("returns saved data with pnoSgcuAwareness on user and no group field", async () => {
     await registerFd(authUser(), validInput({ pnoSgcuAwareness: "instagram" }), injected());
-    const me = await getMe(authUser(), injected());
-    expect(me.user.studentCode).toBe("6912345678");
+    const me = await getProfile(authUser(), injected());
+    expect(me.user.studentId).toBe("6912345678");
     expect(me.user.pnoSgcuAwareness).toBe("instagram");
     expect(me.registration?.pdpaConsent).toBe(true);
     expect(me.travelLegs).toHaveLength(1);
@@ -203,11 +220,38 @@ describe("getMe (FirstDate)", () => {
   });
 
   it("returns a stable empty shape (id null) for a never-registered user", async () => {
-    const me = await getMe(authUser(), injected());
+    const me = await getProfile(authUser(), injected());
     expect(me.user.id).toBeNull();
     expect(me.user.pnoSgcuAwareness).toBeNull();
     expect(me.registration).toBeNull();
     expect(me.travelLegs).toEqual([]);
+  });
+});
+
+describe("getMe (FirstDate) - debloated", () => {
+  it("returns debloated user info if registered", async () => {
+    const regResult = await registerFd(authUser(), validInput(), injected());
+    const me = await getMe(authUser(), injected());
+    expect(me).toEqual({
+      id: regResult.userId,
+      studentId: "6912345678",
+      firstName: "Somchai",
+      lastName: "Jaidee",
+      role: "student",
+      registered: true
+    });
+  });
+
+  it("returns debloated user info if not registered", async () => {
+    const me = await getMe(authUser(), injected());
+    expect(me).toEqual({
+      id: null,
+      studentId: "6912345678",
+      firstName: "Somchai",
+      lastName: "Jaidee",
+      role: "student",
+      registered: false
+    });
   });
 });
 

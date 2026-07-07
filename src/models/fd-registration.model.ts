@@ -4,7 +4,7 @@ import { tSuccessResponse } from "@src/utils";
 import { registrationFields } from "./registration-fields";
 
 /**
- * DTOs for the FirstDate registration flow (POST /v1/fd/users/register,
+ * DTOs for the FirstDate registration flow (POST /v1/fd/users/registration,
  * GET /v1/fd/users/me). Schema-only (see docs/mvc.md). Same shared field nodes
  * as RPKM (via `registrationFields()`), but with NO group — FirstDate has no
  * groups (group_id stays null).
@@ -19,14 +19,24 @@ const registrationResult = t.Object({
   registrationId: t.String({ format: "uuid" })
 });
 
-const meResult = t.Object({
+const profileResult = t.Object({
   user: f.meUser,
   registration: t.Nullable(f.meRegistration),
   travelLegs: t.Array(f.travelLegView)
 });
 
+const meResult = t.Object({
+  id: t.Nullable(t.String()),
+  studentId: t.String(),
+  firstName: t.String(),
+  lastName: t.String(),
+  role: t.String(),
+  registered: t.Boolean()
+});
+
 export const FdRegistrationModel = new Elysia().model({
   registrationBody: f.registrationBody,
   registrationResponse: tSuccessResponse(registrationResult),
-  meResponse: tSuccessResponse(meResult)
+  meResponse: tSuccessResponse(meResult),
+  profileResponse: tSuccessResponse(profileResult)
 });

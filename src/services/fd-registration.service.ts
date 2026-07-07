@@ -1,9 +1,11 @@
 import {
   getRegistrationMe,
+  getRegistrationProfile,
   RegistrationServiceError,
   submitRegistration,
   type AuthUser,
   type MeResult,
+  type ProfileResult,
   type RegisterDeps,
   type RegisterResult,
   type RegistrationInput
@@ -18,7 +20,8 @@ import {
 
 // FirstDate results never carry a group.
 export type FdRegisterResult = Omit<RegisterResult, "group">;
-export type FdMeResult = Omit<MeResult, "group">;
+export type FdMeResult = MeResult;
+export type FdProfileResult = Omit<ProfileResult, "group">;
 
 const registerFd = async (
   authUser: AuthUser,
@@ -38,7 +41,18 @@ const getMe = async (
   authUser: AuthUser,
   deps: { db?: RegisterDeps["db"] } = {}
 ): Promise<FdMeResult> => {
-  const { user, registration, travelLegs } = await getRegistrationMe(authUser, "firstdate", deps);
+  return getRegistrationMe(authUser, "firstdate", deps);
+};
+
+const getProfile = async (
+  authUser: AuthUser,
+  deps: { db?: RegisterDeps["db"] } = {}
+): Promise<FdProfileResult> => {
+  const { user, registration, travelLegs } = await getRegistrationProfile(
+    authUser,
+    "firstdate",
+    deps
+  );
   return { user, registration, travelLegs };
 };
 
@@ -46,5 +60,6 @@ const getMe = async (
 export const FdRegistrationService = {
   FdRegistrationServiceError: RegistrationServiceError,
   registerFd,
-  getMe
+  getMe,
+  getProfile
 };

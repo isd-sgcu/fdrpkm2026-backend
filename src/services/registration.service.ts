@@ -93,7 +93,7 @@ export type MeUser = {
   // students uuid once registered; null before the students row exists
   // (never the Better Auth user id — that would switch namespaces).
   id: string | null;
-  studentCode: string;
+  studentId: string;
   prefix: string | null;
   firstName: string;
   lastName: string;
@@ -112,7 +112,7 @@ export type MeUser = {
   pnoSgcuAwareness: string | null;
 };
 
-export type MeResult = {
+export type ProfileResult = {
   user: MeUser;
   registration: {
     pdpaConsent: boolean;
@@ -128,6 +128,15 @@ export type MeResult = {
     destinationProvince: string;
   }>;
   group: GroupView | null;
+};
+
+export type MeResult = {
+  id: string | null;
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  registered: boolean;
 };
 
 /** Injectable dependencies — routes use the defaults; tests pass a migrated
@@ -159,11 +168,6 @@ export class RegistrationServiceError extends Error {
  * Lowercased so it's stable across email casings and matches the
  * case-insensitive `students.email` unique index. */
 const deriveStudentId = (email: string): string => (email.split("@")[0] || email).toLowerCase();
-
-// Year-one only: student_id starts with '69' (cohort 2569) — derived, never
-// stored (schema-spec gotcha #9). Registration is restricted to freshmen.
-const FRESHMAN_ID_PREFIX = "69";
-const isFreshman = (studentId: string): boolean => studentId.startsWith(FRESHMAN_ID_PREFIX);
 
 const splitName = (name: string): { firstName: string; lastName: string } => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -230,9 +234,15 @@ export const submitRegistration = async (
 
   const derivedStudentId = deriveStudentId(authUser.email);
 
-  // Freshman-only (403): only year-one students may register.
-  if (!isFreshman(derivedStudentId)) {
-    throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+  // Prevent pre-seeded staff calling this api.
+  const [existingStudent] = await database
+    .select()
+    .from(students)
+    .where(eq(students.studentId, derivedStudentId))
+    .limit(1);
+
+  if (existingStudent?.role === "staff") {
+    throw new RegistrationServiceError("FORBIDDEN", "error_staff_not_allowed");
   }
 
   if (input.pdpaConsent !== true) {
@@ -270,6 +280,7 @@ export const submitRegistration = async (
         email,
         firstName: input.firstName ?? authName.firstName,
         lastName: input.lastName ?? authName.lastName,
+        role: "student",
         ...profile
       })
       .onConflictDoUpdate({
@@ -352,7 +363,7 @@ export const submitRegistration = async (
 
 const toMeUser = (student: Student): MeUser => ({
   id: student.id,
-  studentCode: student.studentId,
+  studentId: student.studentId,
   prefix: student.prefix,
   firstName: student.firstName,
   lastName: student.lastName,
@@ -383,10 +394,47 @@ export const getRegistrationMe = async (
   const database = deps.db ?? defaultDb;
   const studentId = deriveStudentId(authUser.email);
 
-  // Freshman-only (403): mirrors register — a non-freshman can't read a prefill.
-  if (!isFreshman(studentId)) {
-    throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+  const [student] = await database
+    .select()
+    .from(students)
+    .where(eq(students.studentId, studentId))
+    .limit(1);
+
+  if (!student) {
+    const { firstName, lastName } = splitName(authUser.name);
+    return {
+      id: null,
+      studentId,
+      firstName,
+      lastName,
+      role: "student",
+      registered: false
+    };
   }
+
+  const [registration] = await database
+    .select()
+    .from(registrations)
+    .where(and(eq(registrations.studentId, student.id), eq(registrations.project, project)))
+    .limit(1);
+
+  return {
+    id: student.id,
+    studentId: student.studentId,
+    firstName: student.firstName,
+    lastName: student.lastName,
+    role: student.role,
+    registered: !!registration
+  };
+};
+
+export const getRegistrationProfile = async (
+  authUser: AuthUser,
+  project: Project,
+  deps: { db?: Database } = {}
+): Promise<ProfileResult> => {
+  const database = deps.db ?? defaultDb;
+  const studentId = deriveStudentId(authUser.email);
 
   const [student] = await database
     .select()
@@ -399,7 +447,7 @@ export const getRegistrationMe = async (
     return {
       user: {
         id: null,
-        studentCode: studentId,
+        studentId,
         prefix: null,
         firstName,
         lastName,
@@ -426,7 +474,7 @@ export const getRegistrationMe = async (
     .where(and(eq(registrations.studentId, student.id), eq(registrations.project, project)))
     .limit(1);
 
-  let legs: MeResult["travelLegs"] = [];
+  let legs: ProfileResult["travelLegs"] = [];
   let group: GroupView | null = null;
 
   if (registration) {

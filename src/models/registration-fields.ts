@@ -57,7 +57,7 @@ export const registrationFields = () => {
   // so the frontend can prefill it even before a registration exists.
   const meUser = t.Object({
     id: t.Nullable(t.String()),
-    studentCode: t.String(),
+    studentId: t.String(),
     prefix: t.Nullable(t.String()),
     firstName: t.String(),
     lastName: t.String(),

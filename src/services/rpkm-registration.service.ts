@@ -1,11 +1,13 @@
 import {
   generateJoinCode,
   getRegistrationMe,
+  getRegistrationProfile,
   RegistrationServiceError,
   submitRegistration,
   type AuthUser,
   type GroupView,
   type MeResult,
+  type ProfileResult,
   type RegisterDeps,
   type RegisterResult,
   type RegistrationInput
@@ -38,11 +40,17 @@ const registerRpkm = async (
 const getMe = (authUser: AuthUser, deps: { db?: RegisterDeps["db"] } = {}): Promise<MeResult> =>
   getRegistrationMe(authUser, "rpkm", deps);
 
+const getProfile = (
+  authUser: AuthUser,
+  deps: { db?: RegisterDeps["db"] } = {}
+): Promise<ProfileResult> => getRegistrationProfile(authUser, "rpkm", deps);
+
 // Namespace object — routes call `RpkmRegistrationService.<fn>(...)`. The error
 // class is the shared one; the alias keeps the route's instanceof check stable.
 export const RpkmRegistrationService = {
   RpkmRegistrationServiceError: RegistrationServiceError,
   registerRpkm,
   getMe,
+  getProfile,
   generateJoinCode
 };
