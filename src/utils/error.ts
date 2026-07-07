@@ -13,6 +13,8 @@ export const AppErrorCode = {
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
   /** 404: requested resource does not exist. */
   NOT_FOUND: "NOT_FOUND",
+  /** 403: user is not a freshmen, cannot access resource. */
+  NOT_FRESHMEN: "NOT_FRESHMEN",
   /** 400: PDPA consent is required but was not given. */
   PDPA_REQUIRED: "PDPA_REQUIRED",
   /** 401: request lacks valid authentication credentials. */
