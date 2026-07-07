@@ -19,10 +19,15 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
   .use(authMiddleware)
   .use(RpkmRegistrationModel)
   .prefix("model", "RpkmUser.")
-  // Standardize DTO validation failures into our envelope (422 error_validation)
-  // instead of Elysia's default error shape.
-  .onError(({ code, status }) => {
+  // Standardize errors into our envelope. Request-body validation -> 422
+  // error_validation; a *response*-schema mismatch is a server bug, not the
+  // client's fault, so it falls through to the 500 envelope below.
+  .onError(({ code, error, status }) => {
     if (code === "VALIDATION") {
+      if ((error as { type?: string }).type === "response") {
+        console.error("[rpkm registration] response schema mismatch:", error);
+        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
+      }
       return status(422, errorResponse("VALIDATION", { message: "error_validation" }));
     }
   })
@@ -39,15 +44,19 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
               return status(400, errorResponse("PDPA_REQUIRED", { message: err.message }));
             case "BAD_REQUEST":
               return status(400, errorResponse("BAD_REQUEST", { message: err.message }));
-            case "NOT_FRESHMEN":
-              return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
+            case "FORBIDDEN":
+              // staff may not register as a participant
+              return status(403, errorResponse("FORBIDDEN", { message: err.message }));
             case "ALREADY_REGISTERED":
               return status(409, errorResponse("ALREADY_REGISTERED", { message: err.message }));
             default:
               return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
           }
         }
-        throw err;
+        // Unexpected (non-domain) error — keep the standard envelope, don't
+        // leak Elysia's default error body.
+        console.error("[rpkm registration] unexpected error:", err);
+        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
       }
     },
     {
@@ -60,26 +69,23 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
           tErrorResponse("PDPA_REQUIRED", t.Object({ message: t.String() }))
         ]),
         401: tErrorResponse("UNAUTHORIZED"),
-        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
+        403: tErrorResponse("FORBIDDEN", t.Object({ message: t.String() })),
         409: tErrorResponse("ALREADY_REGISTERED", t.Object({ message: t.String() })),
         422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }
   )
+  // Any authenticated user may read their own prefill (no freshman/staff gate).
   .get(
     "/me",
     async ({ user, status }) => {
       try {
         return successResponse(await RpkmRegistrationService.getMe(user));
       } catch (err) {
-        if (
-          err instanceof RpkmRegistrationService.RpkmRegistrationServiceError &&
-          err.code === "NOT_FRESHMEN"
-        ) {
-          return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
-        }
-        throw err;
+        // No domain errors here — but keep unexpected faults inside the envelope.
+        console.error("[rpkm /me] unexpected error:", err);
+        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
       }
     },
     {
@@ -87,7 +93,7 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
       response: {
         200: "RpkmUser.MeResponse",
         401: tErrorResponse("UNAUTHORIZED"),
-        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() }))
+        500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }
   );

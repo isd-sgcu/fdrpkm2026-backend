@@ -176,18 +176,33 @@ describe("registerFd — insert-only", () => {
   });
 });
 
-describe("registerFd — freshman only", () => {
-  it("rejects a non-freshman with NOT_FRESHMEN", async () => {
-    await expect(
-      registerFd(authUser({ email: "6612345678@student.chula.ac.th" }), validInput(), injected())
-    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
-    expect(await db.select().from(schema.students)).toHaveLength(0);
+describe("registerFd — access control", () => {
+  it("allows any authenticated user to register (not only freshmen)", async () => {
+    const result = await registerFd(
+      authUser({ email: "6612345678@student.chula.ac.th" }),
+      validInput(),
+      injected()
+    );
+    expect(result.registrationId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("getMe rejects a non-freshman with NOT_FRESHMEN", async () => {
-    await expect(
-      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
-    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+  it("rejects a pre-seeded staff member (FORBIDDEN)", async () => {
+    await db.insert(schema.students).values({
+      studentId: "6912345678",
+      email: "6912345678@student.chula.ac.th",
+      firstName: "Staff",
+      lastName: "Member",
+      role: "staff"
+    });
+    await expect(registerFd(authUser(), validInput(), injected())).rejects.toMatchObject({
+      code: "FORBIDDEN"
+    });
+    expect(await db.select().from(schema.registrations)).toHaveLength(0);
+  });
+
+  it("getMe allows any authenticated user", async () => {
+    const me = await getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected());
+    expect(me.user.studentCode).toBe("6612345678");
   });
 });
 
