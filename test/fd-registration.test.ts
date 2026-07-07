@@ -176,6 +176,21 @@ describe("registerFd — insert-only", () => {
   });
 });
 
+describe("registerFd — freshman only", () => {
+  it("rejects a non-freshman with NOT_FRESHMEN", async () => {
+    await expect(
+      registerFd(authUser({ email: "6612345678@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+    expect(await db.select().from(schema.students)).toHaveLength(0);
+  });
+
+  it("getMe rejects a non-freshman with NOT_FRESHMEN", async () => {
+    await expect(
+      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+  });
+});
+
 describe("getMe (FirstDate)", () => {
   it("returns saved data with pnoSgcuAwareness on user and no group field", async () => {
     await registerFd(authUser(), validInput({ pnoSgcuAwareness: "instagram" }), injected());

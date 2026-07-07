@@ -20,7 +20,9 @@ export const AppErrorCode = {
   /** 401: request lacks valid authentication credentials. */
   UNAUTHORIZED: "UNAUTHORIZED",
   /** 409: user already exists, cannot register again. */
-  USER_ALREADY_EXISTS: "USER_ALREADY_EXISTS"
+  USER_ALREADY_EXISTS: "USER_ALREADY_EXISTS",
+  /** 422: request body failed schema validation. */
+  VALIDATION: "VALIDATION"
 } as const;
 
 /** Union of AppErrorCode key names, e.g. "NOT_FOUND". */

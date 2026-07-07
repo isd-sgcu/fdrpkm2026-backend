@@ -289,6 +289,21 @@ describe("registerRpkm — join code", () => {
   });
 });
 
+describe("registerRpkm — freshman only", () => {
+  it("rejects a non-freshman (student_id not starting with 69) with NOT_FRESHMEN", async () => {
+    await expect(
+      registerRpkm(authUser({ email: "6612345678@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+    expect(await db.select().from(schema.students)).toHaveLength(0);
+  });
+
+  it("getMe rejects a non-freshman with NOT_FRESHMEN", async () => {
+    await expect(
+      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+  });
+});
+
 describe("getMe", () => {
   it("returns the saved data with pnoSgcuAwareness + profile on the user object", async () => {
     await registerRpkm(
