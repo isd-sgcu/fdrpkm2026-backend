@@ -1,0 +1,1 @@
+ALTER TABLE "groups" ADD COLUMN "confirmed_at" timestamp with time zone;
