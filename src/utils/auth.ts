@@ -35,7 +35,12 @@ export const auth = betterAuth({
       ...(env.NODE_ENV !== "production" ? ["localhost:*"] : [])
     ],
     protocol: env.NODE_ENV !== "production" ? "http" : "https",
-    fallback: env.BETTER_AUTH_URL || undefined
+    // Direct auth.api calls with no request context (e.g. generateOpenAPISchema
+    // at app startup) need a resolvable baseURL. Fall back to localhost outside
+    // production when BETTER_AUTH_URL is unset (e.g. `bun test` with no .env);
+    // production always sets it explicitly.
+    fallback:
+      env.BETTER_AUTH_URL || (env.NODE_ENV !== "production" ? "http://localhost:3000" : undefined)
   },
   // Public endpoint is https://<fd|rpkm>-api.rpkm2026.com/v1/auth/* — keep in
   // sync with apiRoutes' "/v1" prefix in src/routes/index.ts.

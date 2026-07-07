@@ -3,6 +3,8 @@
  */
 // Sort ALPHABETICALLY by key name, not value, so that the enum is easier to read and maintain.
 export const AppErrorCode = {
+  /** 409: already registered for this project; registration is insert-only. */
+  ALREADY_REGISTERED: "ALREADY_REGISTERED",
   /** 400: request malformed or failed validation. */
   BAD_REQUEST: "BAD_REQUEST",
   /** 403: authenticated but not allowed to access resource. */
@@ -13,6 +15,8 @@ export const AppErrorCode = {
   NOT_FOUND: "NOT_FOUND",
   /** 403: user is not a freshmen, cannot access resource. */
   NOT_FRESHMEN: "NOT_FRESHMEN",
+  /** 400: PDPA consent is required but was not given. */
+  PDPA_REQUIRED: "PDPA_REQUIRED",
   /** 401: request lacks valid authentication credentials. */
   UNAUTHORIZED: "UNAUTHORIZED",
   /** 409: user already exists, cannot register again. */
