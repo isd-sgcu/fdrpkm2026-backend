@@ -26,9 +26,12 @@ import {
  * resolves it to a `students` row (no FK links Better Auth's `user` table to
  * `students`, so we link on the email-derived student_id and upsert here).
  *
- * `students` is upserted (profile is editable / prefillable), but a
- * `registrations` row is **insert-only** — one registration per (student,
- * project). A duplicate submit is rejected with ALREADY_REGISTERED (409).
+ * `students` is upserted from the payload on the *first* registration (and on
+ * a cross-project first registration), but a `registrations` row is
+ * **insert-only** — one per (student, project). A duplicate submit is rejected
+ * with ALREADY_REGISTERED (409), which rolls the whole transaction back — so a
+ * re-submit does NOT edit an existing profile. Post-registration profile edits
+ * would need a separate `PATCH /users/me` endpoint (not built).
  */
 
 export type Project = "firstdate" | "rpkm";
