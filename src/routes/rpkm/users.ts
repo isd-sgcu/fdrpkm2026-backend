@@ -19,6 +19,13 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
   .use(authMiddleware)
   .use(RpkmRegistrationModel)
   .prefix("model", "RpkmUser.")
+  // Standardize DTO validation failures into our envelope (422 error_validation)
+  // instead of Elysia's default error shape.
+  .onError(({ code, status }) => {
+    if (code === "VALIDATION") {
+      return status(422, errorResponse("VALIDATION", { message: "error_validation" }));
+    }
+  })
   .post(
     "/registration",
     async ({ user, body, status }) => {
@@ -32,6 +39,8 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
               return status(400, errorResponse("PDPA_REQUIRED", { message: err.message }));
             case "BAD_REQUEST":
               return status(400, errorResponse("BAD_REQUEST", { message: err.message }));
+            case "NOT_FRESHMEN":
+              return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
             case "ALREADY_REGISTERED":
               return status(409, errorResponse("ALREADY_REGISTERED", { message: err.message }));
             default:
@@ -51,15 +60,34 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
           tErrorResponse("PDPA_REQUIRED", t.Object({ message: t.String() }))
         ]),
         401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         409: tErrorResponse("ALREADY_REGISTERED", t.Object({ message: t.String() })),
+        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }
   )
-  .get("/me", async ({ user }) => successResponse(await RpkmRegistrationService.getMe(user)), {
-    auth: true,
-    response: {
-      200: "RpkmUser.MeResponse",
-      401: tErrorResponse("UNAUTHORIZED")
+  .get(
+    "/me",
+    async ({ user, status }) => {
+      try {
+        return successResponse(await RpkmRegistrationService.getMe(user));
+      } catch (err) {
+        if (
+          err instanceof RpkmRegistrationService.RpkmRegistrationServiceError &&
+          err.code === "NOT_FRESHMEN"
+        ) {
+          return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      response: {
+        200: "RpkmUser.MeResponse",
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() }))
+      }
     }
-  });
+  );
