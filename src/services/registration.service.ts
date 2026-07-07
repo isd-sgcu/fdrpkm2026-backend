@@ -157,6 +157,11 @@ export class RegistrationServiceError extends Error {
  * case-insensitive `students.email` unique index. */
 const deriveStudentId = (email: string): string => (email.split("@")[0] || email).toLowerCase();
 
+// Year-one only: student_id starts with '69' (cohort 2569) — derived, never
+// stored (schema-spec). Registration is restricted to freshmen.
+const FRESHMAN_ID_PREFIX = "69";
+const isFreshman = (studentId: string): boolean => studentId.startsWith(FRESHMAN_ID_PREFIX);
+
 const splitName = (name: string): { firstName: string; lastName: string } => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") };
@@ -220,6 +225,12 @@ export const submitRegistration = async (
   const database = deps.db ?? defaultDb;
   const genCode = deps.genCode ?? generateJoinCode;
 
+  // Freshman-only (403): only year-one students may register.
+  const derivedStudentId = deriveStudentId(authUser.email);
+  if (!isFreshman(derivedStudentId)) {
+    throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+  }
+
   if (input.pdpaConsent !== true) {
     throw new RegistrationServiceError("PDPA_REQUIRED", "error_pdpa_required");
   }
@@ -240,7 +251,6 @@ export const submitRegistration = async (
     }
   }
 
-  const derivedStudentId = deriveStudentId(authUser.email);
   const email = authUser.email.toLowerCase();
   const authName = splitName(authUser.name);
   const profile = collectProfile(input);
@@ -368,6 +378,12 @@ export const getRegistrationMe = async (
 ): Promise<MeResult> => {
   const database = deps.db ?? defaultDb;
   const studentId = deriveStudentId(authUser.email);
+
+  // Freshman-only (403): mirrors the register guard so a non-freshman can't
+  // read a prefill either.
+  if (!isFreshman(studentId)) {
+    throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+  }
 
   const [student] = await database
     .select()

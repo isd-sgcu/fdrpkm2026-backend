@@ -17,6 +17,12 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   .use(authMiddleware)
   .use(FdRegistrationModel)
   .prefix("model", "FdUser.")
+  // Standardize DTO validation failures into our envelope (422 error_validation).
+  .onError(({ code, status }) => {
+    if (code === "VALIDATION") {
+      return status(422, errorResponse("VALIDATION", { message: "error_validation" }));
+    }
+  })
   .post(
     "/register",
     async ({ user, body, status }) => {
@@ -30,6 +36,8 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
               return status(400, errorResponse("PDPA_REQUIRED", { message: err.message }));
             case "BAD_REQUEST":
               return status(400, errorResponse("BAD_REQUEST", { message: err.message }));
+            case "NOT_FRESHMEN":
+              return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
             case "ALREADY_REGISTERED":
               return status(409, errorResponse("ALREADY_REGISTERED", { message: err.message }));
             default:
@@ -49,15 +57,34 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
           tErrorResponse("PDPA_REQUIRED", t.Object({ message: t.String() }))
         ]),
         401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         409: tErrorResponse("ALREADY_REGISTERED", t.Object({ message: t.String() })),
+        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }
   )
-  .get("/me", async ({ user }) => successResponse(await FdRegistrationService.getMe(user)), {
-    auth: true,
-    response: {
-      200: "FdUser.MeResponse",
-      401: tErrorResponse("UNAUTHORIZED")
+  .get(
+    "/me",
+    async ({ user, status }) => {
+      try {
+        return successResponse(await FdRegistrationService.getMe(user));
+      } catch (err) {
+        if (
+          err instanceof FdRegistrationService.FdRegistrationServiceError &&
+          err.code === "NOT_FRESHMEN"
+        ) {
+          return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      response: {
+        200: "FdUser.MeResponse",
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() }))
+      }
     }
-  });
+  );

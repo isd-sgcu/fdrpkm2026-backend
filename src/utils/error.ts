@@ -17,12 +17,16 @@ export const AppErrorCode = {
   NOT_FOUND: "NOT_FOUND",
   /** 403: user is not a freshmen, cannot access resource. */
   NOT_FRESHMEN: "NOT_FRESHMEN",
+  /** 400: PDPA consent is required but was not given. */
+  PDPA_REQUIRED: "PDPA_REQUIRED",
   /** 404: student_id from QR does not match any student. */
   STUDENT_NOT_FOUND: "STUDENT_NOT_FOUND",
   /** 401: request lacks valid authentication credentials. */
   UNAUTHORIZED: "UNAUTHORIZED",
   /** 409: user already exists, cannot register again. */
   USER_ALREADY_EXISTS: "USER_ALREADY_EXISTS",
+  /** 422: request body failed schema validation. */
+  VALIDATION: "VALIDATION",
   /** 422: payload failed shape/format validation. */
   VALIDATION_ERROR: "VALIDATION_ERROR"
 } as const;

@@ -10,9 +10,11 @@ export const authMiddleware = new Elysia({ name: "better-auth" }).mount(auth.han
 
       if (!session) return status(401, errorResponse("UNAUTHORIZED"));
 
+      const studentId = session.user?.email?.split("@")[0];
       return {
         user: session.user,
-        session: session.session
+        session: session.session,
+        studentId
       };
     }
   }
