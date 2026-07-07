@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
-import { db } from "@src/db";
+import type { Database } from "@src/db";
 import { entries, students, type NewEntry } from "@src/db/schema";
-import { AppErrorCode } from "@src/utils";
+import type { AppErrorCode } from "@src/utils";
 
 /**
  * Shared logic for "staff scans student" flows, used by both
@@ -16,12 +16,16 @@ export class CheckinError extends Error {
 
 type CheckinProject = "rpkm" | "freshmennight";
 
-export async function checkinStudent(params: {
-  studentCunetId: string;
-  staffCunetId: string;
-  project: CheckinProject;
-}) {
+export async function checkinStudent(
+  params: {
+    studentCunetId: string;
+    staffCunetId: string;
+    project: CheckinProject;
+  },
+  deps: { db: Database }
+) {
   const { studentCunetId, staffCunetId, project } = params;
+  const { db } = deps;
 
   const [student] = await db.select().from(students).where(eq(students.studentId, studentCunetId));
   if (!student) throw new CheckinError("STUDENT_NOT_FOUND");
@@ -37,7 +41,12 @@ export async function checkinStudent(params: {
     const [inserted] = await db.insert(entries).values(newEntry).returning();
     return inserted;
   } catch (err) {
-    if (err && typeof err === "object" && "code" in err && err.code === "23505") {
+    const cause =
+      err && typeof err === "object" && "cause" in err
+        ? (err as { cause: unknown }).cause
+        : undefined;
+
+    if (cause && typeof cause === "object" && "code" in cause && cause.code === "23505") {
       throw new CheckinError("ALREADY_CHECKED_IN");
     }
     throw err;
