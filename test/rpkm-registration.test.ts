@@ -289,39 +289,18 @@ describe("registerRpkm — join code", () => {
   });
 });
 
-describe("registerRpkm — access control", () => {
-  it("allows any authenticated user to register (not only freshmen)", async () => {
-    const result = await registerRpkm(
-      authUser({ email: "6612345678@student.chula.ac.th" }),
-      validInput(),
-      injected()
-    );
-    expect(result.registrationId).toMatch(/^[0-9a-f-]{36}$/);
+describe("registerRpkm — freshman only", () => {
+  it("rejects a non-freshman (student_id not starting with 69) with NOT_FRESHMEN", async () => {
+    await expect(
+      registerRpkm(authUser({ email: "6612345678@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+    expect(await db.select().from(schema.students)).toHaveLength(0);
   });
 
-  it("rejects a pre-seeded staff member (FORBIDDEN) without mutating their row", async () => {
-    await db.insert(schema.students).values({
-      studentId: "6912345678",
-      email: "6912345678@student.chula.ac.th",
-      firstName: "Staff",
-      lastName: "Member",
-      role: "staff"
-    });
-
-    await expect(registerRpkm(authUser(), validInput(), injected())).rejects.toMatchObject({
-      code: "FORBIDDEN"
-    });
-
-    const [s] = await db.select().from(schema.students);
-    expect(s.role).toBe("staff");
-    expect(s.firstName).toBe("Staff"); // not overwritten by the register payload
-    expect(await db.select().from(schema.registrations)).toHaveLength(0);
-  });
-
-  it("getMe allows any authenticated user (no freshman/staff gate)", async () => {
-    const me = await getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected());
-    expect(me.user.studentCode).toBe("6612345678");
-    expect(me.registration).toBeNull();
+  it("getMe rejects a non-freshman with NOT_FRESHMEN", async () => {
+    await expect(
+      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
   });
 });
 

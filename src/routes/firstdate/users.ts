@@ -42,9 +42,8 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
               return status(400, errorResponse("PDPA_REQUIRED", { message: err.message }));
             case "BAD_REQUEST":
               return status(400, errorResponse("BAD_REQUEST", { message: err.message }));
-            case "FORBIDDEN":
-              // staff may not register as a participant
-              return status(403, errorResponse("FORBIDDEN", { message: err.message }));
+            case "NOT_FRESHMEN":
+              return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
             case "ALREADY_REGISTERED":
               return status(409, errorResponse("ALREADY_REGISTERED", { message: err.message }));
             default:
@@ -66,7 +65,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
           tErrorResponse("PDPA_REQUIRED", t.Object({ message: t.String() }))
         ]),
         401: tErrorResponse("UNAUTHORIZED"),
-        403: tErrorResponse("FORBIDDEN", t.Object({ message: t.String() })),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         409: tErrorResponse("ALREADY_REGISTERED", t.Object({ message: t.String() })),
         422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
@@ -80,6 +79,12 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       try {
         return successResponse(await FdRegistrationService.getMe(user));
       } catch (err) {
+        if (
+          err instanceof FdRegistrationService.FdRegistrationServiceError &&
+          err.code === "NOT_FRESHMEN"
+        ) {
+          return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
+        }
         console.error("[fd /me] unexpected error:", err);
         return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
       }
@@ -89,6 +94,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       response: {
         200: "FdUser.MeResponse",
         401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }

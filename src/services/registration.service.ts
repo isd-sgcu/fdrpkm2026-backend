@@ -160,6 +160,11 @@ export class RegistrationServiceError extends Error {
  * case-insensitive `students.email` unique index. */
 const deriveStudentId = (email: string): string => (email.split("@")[0] || email).toLowerCase();
 
+// Year-one only: student_id starts with '69' (cohort 2569) — derived, never
+// stored (schema-spec gotcha #9). Registration is restricted to freshmen.
+const FRESHMAN_ID_PREFIX = "69";
+const isFreshman = (studentId: string): boolean => studentId.startsWith(FRESHMAN_ID_PREFIX);
+
 const splitName = (name: string): { firstName: string; lastName: string } => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") };
@@ -225,6 +230,11 @@ export const submitRegistration = async (
 
   const derivedStudentId = deriveStudentId(authUser.email);
 
+  // Freshman-only (403): only year-one students may register.
+  if (!isFreshman(derivedStudentId)) {
+    throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+  }
+
   if (input.pdpaConsent !== true) {
     throw new RegistrationServiceError("PDPA_REQUIRED", "error_pdpa_required");
   }
@@ -250,18 +260,6 @@ export const submitRegistration = async (
   const profile = collectProfile(input);
 
   return database.transaction(async (tx) => {
-    // Staff are pre-seeded (students.role = 'staff') and must not register as
-    // participants. Check before the upsert so a staff row is never mutated.
-    // Any other authenticated user (new, or an existing 'student') may register.
-    const [existing] = await tx
-      .select({ role: students.role })
-      .from(students)
-      .where(eq(students.studentId, derivedStudentId))
-      .limit(1);
-    if (existing?.role === "staff") {
-      throw new RegistrationServiceError("FORBIDDEN", "error_staff_forbidden");
-    }
-
     // 1. upsert the student (identity link on the immutable student_id). Names
     //    come from the payload when given (fallback to the SSO name); the
     //    conflict set only touches columns the client actually sent.
@@ -385,7 +383,11 @@ export const getRegistrationMe = async (
   const database = deps.db ?? defaultDb;
   const studentId = deriveStudentId(authUser.email);
 
-  // Any authenticated user may read their own prefill (no freshman/staff gate).
+  // Freshman-only (403): mirrors register — a non-freshman can't read a prefill.
+  if (!isFreshman(studentId)) {
+    throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+  }
+
   const [student] = await database
     .select()
     .from(students)
