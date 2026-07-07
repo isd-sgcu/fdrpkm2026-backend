@@ -15,6 +15,8 @@ export const AppErrorCode = {
   GROUP_FULL: "GROUP_FULL",
   /** 409: group is confirmed — house preferences can no longer be changed. */
   HOUSE_PICK_CLOSED: "HOUSE_PICK_CLOSED",
+  /** 400: fewer than 1 ranked house preferences set, cannot confirm yet. */
+  HOUSE_PREF_INCOMPLETE: "HOUSE_PREF_INCOMPLETE",
   /** 500: unexpected server-side error, request could not be fulfilled. */
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
   /** 404: join code does not match any group. */

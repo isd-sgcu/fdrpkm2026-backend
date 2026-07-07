@@ -233,6 +233,7 @@ const setHousePreferences = async (
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
   if (group.confirmedAt || isEventPassed("rpkm_house_pick"))
     throw new GroupsServiceError("HOUSE_PICK_CLOSED");
+  if (houseIds.length < 1 || houseIds.length > 5) throw new GroupsServiceError("BAD_REQUEST");
   if (new Set(houseIds).size !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
 
   const existingHouses = await db.select().from(houses).where(inArray(houses.id, houseIds));
@@ -379,6 +380,7 @@ const confirmGroup = async (studentId: string): Promise<{ confirmedAt: Date }> =
     .select()
     .from(groupHouseChoices)
     .where(eq(groupHouseChoices.groupId, group.id));
+  if (preferences.length < 1) throw new GroupsServiceError("HOUSE_PREF_INCOMPLETE");
   if (preferences.length > 5) throw new GroupsServiceError("TOO_MANY_HOUSE_PREFS");
 
   const confirmedAt = new Date();
