@@ -1,5 +1,5 @@
 import type { AppErrorCode } from "@src/utils";
-
+import { checkinStudent } from "@src/services/checkin.helper";
 /**
  * "Model" layer for MVC — data access + business rules for FirstDate
  * (project=firstdate). Routes in src/routes/firstdate call into this;
@@ -20,7 +20,12 @@ const getFirstDateProfile = (user: { name: string }): { name: string } => ({
 
 // Namespace object — routes call `FirstDateService.getFirstDateProfile(...)`
 // instead of importing individual functions.
+
+const checkinFreshmenNight = (staffCunetId: string, studentCunetId: string) =>
+  checkinStudent({ studentCunetId, staffCunetId, project: "freshmennight" });
+
 export const FirstDateService = {
   FirstDateServiceError,
-  getFirstDateProfile
+  getFirstDateProfile,
+  checkinFreshmenNight
 };

@@ -1,0 +1,178 @@
+[33mcommit e8a6586d0b7899cc0a0766000f01f15ef39d2c8e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeat/isd-29-rpkm-registration-api[m[33m)[m
+Author: K3-Win <wwin59296@gmail.com>
+Date:   Mon Jul 6 21:06:48 2026 +0700
+
+    edit error, add checkinhelper
+
+[33mcommit 28d882ad1ff21eeec4d75301a616bc18342f14c6[m[33m ([m[1;31morigin/feat/isd-29-rpkm-registration-api[m[33m)[m
+Author: beawkiattisak <beawkiattisak@gmail.com>
+Date:   Mon Jul 6 19:37:14 2026 +0700
+
+    [ISD-29] feat: enhance registration service with error handling and validation
+    
+    - Added new error codes for registration scenarios: ALREADY_REGISTERED and PDPA_REQUIRED.
+    - Updated tests to reflect changes in travel leg acceptance, now allowing up to 4 legs.
+    - Refactored registration tests to use a valid input helper for consistency.
+    - Implemented checks to reject invalid PDPA consent and travel leg configurations.
+    - Ensured that the last leg's destination is enforced only for full journeys.
+    - Added tests for insert-only behavior to prevent duplicate registrations.
+
+[33mcommit 5acbc730673a3f1162734ef77e922deaee4d9088[m
+Author: beawkiattisak <beawkiattisak@gmail.com>
+Date:   Sun Jul 5 12:16:54 2026 +0700
+
+    feat: implement FirstDate registration flow and associated services
+    
+    - Added `FdRegistrationModel` for FirstDate user registration, mirroring RPKM model but without group support.
+    - Created `firstdateUserRoutes` for handling registration and user retrieval endpoints.
+    - Developed `FdRegistrationService` to manage registration logic, including user and travel leg handling.
+    - Introduced shared `RegistrationService` for common registration logic between FirstDate and RPKM.
+    - Implemented tests for FirstDate registration, ensuring proper handling of user data, travel legs, and validation.
+    - Updated `auth.ts` to provide a fallback URL for non-production environments.
+
+[33mcommit 0e73ab231dc5e7c2e821430e6c90ebddd1ae1b9a[m
+Author: Patsagorn Y. <49602385+ptsgrn@users.noreply.github.com>
+Date:   Sat Jul 4 21:18:22 2026 +0700
+
+    [ISD-72] add 'walkrally' option to gameEnum (#4)
+    
+    * feat: add 'walkrally' option to gameEnum
+    
+    * feat: add 'walkrally' option to gameEnum and update project types
+
+[33mcommit d93020ae3b3d91ab9358ca8625c6099b70d55d93[m
+Author: Patsagorn Y. <49602385+ptsgrn@users.noreply.github.com>
+Date:   Sat Jul 4 20:51:01 2026 +0700
+
+    [ISD-71] Enhance authentication, database setup, and documentation updates (#3)
+    
+    * feat: update drizzle configuration and dependencies
+    
+    - Added environment checks in drizzle.config.ts to restrict execution to development and test environments.
+    - Updated drizzle-orm and drizzle-kit to their latest release candidates in package.json.
+    - Added pg dependency for PostgreSQL support.
+    - Enhanced env.ts to include DATABASE_URL and DATABASE_FILE configurations.
+    - Created db/index.ts to initialize database connection based on environment settings.
+    - Modified auth routes to redirect to ChulaSSO login with service URL.
+    - Introduced example routes for firstdate with authentication checks and standardized response handling.
+    - Added error handling utilities in src/utils for consistent API responses.
+    - Updated tsconfig.json to include path aliases for cleaner imports.
+    
+    * feat: add author information to package.json
+    
+    * style: format tsconfig.json for improved readability
+    
+    * feat: add event time constants for feature flag management
+    
+    * feat: update errorResponse function to clarify context parameter usage
+    
+    * feat: implement event management functions for active status checks
+    
+    * feat: add ExampleModel definition for user data structure
+    
+    * feat: implement example routes with user authentication and service integration
+    
+    * feat: implement ExampleService with user management functions
+    
+    * feat: add ExampleService with user management functions
+    
+    * feat: add exampleRoutes integration for development environment
+    
+    * feat: update import paths for env and apiRoutes in app.ts
+    
+    * feat: simplify auth decorator and improve error response structure in firstdate routes
+    
+    * feat: reorder AppErrorCode entries for improved readability
+    
+    * feat: add better-auth dependency for enhanced authentication support
+    
+    * feat: improve error response structure for unauthorized access in firstdate routes
+    
+    * feat: add BETTER_AUTH configuration and initialize auth utility
+    
+    * feat: reorder exports in utils index for improved structure
+    
+    * feat: update import path for env configuration in db index
+    
+    * feat: update env import path and add Google client credentials
+    
+    * feat: add Google client ID and secret to environment example
+    
+    * feat: enhance authentication setup with Google provider and email validation
+    
+    * feat: add @better-auth/i18n dependency to project
+    
+    * chore: update dependencies and add auth generation script
+    
+    - Added a new script for generating authentication schema: `auth:generate`.
+    - Updated `drizzle-orm` from version `1.0.0-rc.4` to `0.45.2`.
+    - Updated `drizzle-kit` from version `1.0.0-rc.4` to `0.31.10`.
+    - Added `auth` package with version `1.6.23`.
+    
+    * feat: update database configuration to use DATABASE_FILE instead of DATABASE_URL
+    
+    * feat: integrate authentication middleware into application setup
+    
+    * feat: refactor environment variable handling and implement authentication schema
+    
+    * feat: add elysia agents
+    
+    * feat: add skills-lock.json for ElysiaJS configuration
+    
+    * feat: add LICENSE file with copyright and permission details
+    
+    * feat: add documentation for Google sign-in flow, MVC structure, and new route/service creation
+    
+    * feat: add Better Auth integration guides for authentication setup and best practices
+    
+    * feat: add backend usage documentation for route protection with Better Auth
+    
+    * feat: refactor ExampleModel to use constant field schemas for improved readability and maintainability
+    
+    * feat: remove unused SSO project handling code from auth routes
+    
+    * feat: add better-auth skills to skills-lock.json for enhanced authentication practices
+    
+    * feat: update README for improved development setup and environment variable documentation
+    
+    * feat: update ESLint config to include ".agents" in ignored files
+    
+    * feat: update health test endpoint to match API versioning
+    
+    * feat: implement ExampleService with CRUD operations and add FirstDateService and RpkmService for MVC structure
+    
+    * feat: enhance Better Auth configuration with detailed host management and email validation
+    
+    * feat: refactor example and firstdate routes to utilize service methods and enhance error handling
+    
+    * feat: add OpenAPI documentation support for non-production environments
+    
+    * feat: update TypeScript ESLint dependencies and add eslint-plugin-drizzle
+    
+    * feat: add documentation for Drizzle ↔ Elysia integration and file upload feature
+    
+    * feat: add spread and spreads helper functions for Drizzle schema integration
+    
+    * feat: add storage utility for S3 file uploads and retrieval
+    
+    * feat: add house listing and retrieval functions to RpkmService
+    
+    * feat: add S3 configuration options to environment settings
+    
+    * feat: add HousesModel for house data representation and schema integration
+    
+    * feat: add AWS SDK S3 client and request presigner dependencies
+    
+    * feat: implement RPKM routes for house listing and retrieval
+    
+    * feat: add ESLint directive to suppress warning for delete route method
+    
+    * feat: add drizzle plugin and update ESLint configuration for TypeScript files
+    
+    * feat: update .env.example with S3 storage configuration and additional environment variables
+    
+    * feat: add CODEOWNERS, PR template, and PR checks workflow for improved collaboration and CI
+    
+    * feat: update pre-commit hook to lint and fix staged files before formatting
+    
+    * feat: add ent
