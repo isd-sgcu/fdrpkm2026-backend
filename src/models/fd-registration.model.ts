@@ -23,31 +23,34 @@ const enumSchema = <T extends readonly string[]>(values: T, title: string) =>
 const vehicle = enumSchema(vehicleEnum.enumValues, "Vehicle");
 const prefix = enumSchema(prefixEnum.enumValues, "Prefix");
 
+// Full-form contract: every field required + non-null, EXCEPT `vehicleOther`
+// (conditional: required iff vehicle = 'other', forbidden otherwise — DB CHECK).
 const travelLegInput = t.Object({
   vehicle,
   vehicleOther: t.Optional(t.Nullable(t.String())),
-  originDistrict: t.Optional(t.String({ title: "Origin district" })),
-  originProvince: t.Optional(t.String({ title: "Origin province" })),
-  destinationDistrict: t.Optional(t.String({ title: "Destination district" })),
-  destinationProvince: t.Optional(t.String({ title: "Destination province" }))
+  originDistrict: t.String({ title: "Origin district" }),
+  originProvince: t.String({ title: "Origin province" }),
+  destinationDistrict: t.String({ title: "Destination district" }),
+  destinationProvince: t.String({ title: "Destination province" })
 });
 
+// Full-form POST body: every field required + non-null (send "" for blanks).
 // travelLegs: 1..4 (DB CHECK seq in (1,2,3,4)).
 const registrationBody = t.Object({
   pdpaConsent: t.Boolean({ title: "PDPA consent", description: "Must be true to register." }),
-  firstName: t.Optional(t.String({ title: "First name" })),
-  lastName: t.Optional(t.String({ title: "Last name" })),
-  prefix: t.Optional(prefix),
-  nickname: t.Optional(t.Nullable(t.String())),
-  faculty: t.Optional(t.Nullable(t.String())),
-  phone: t.Optional(t.Nullable(t.String())),
-  emergencyContactName: t.Optional(t.Nullable(t.String())),
-  emergencyContactPhone: t.Optional(t.Nullable(t.String())),
-  allergies: t.Optional(t.Nullable(t.String())),
-  dietary: t.Optional(t.Nullable(t.String())),
-  medicalNotes: t.Optional(t.Nullable(t.String())),
-  pnoSgcuAwareness: t.Optional(t.Nullable(t.String())),
-  pnoReferralSource: t.Optional(t.Nullable(t.String())),
+  prefix,
+  firstName: t.String({ title: "First name" }),
+  lastName: t.String({ title: "Last name" }),
+  nickname: t.String({ title: "Nickname" }),
+  faculty: t.String({ title: "Faculty" }),
+  phone: t.String({ title: "Phone" }),
+  emergencyContactName: t.String({ title: "Emergency contact name" }),
+  emergencyContactPhone: t.String({ title: "Emergency contact phone" }),
+  allergies: t.String({ title: "Allergies" }),
+  dietary: t.String({ title: "Dietary" }),
+  medicalNotes: t.String({ title: "Medical notes" }),
+  pnoSgcuAwareness: t.String({ title: "SGCU awareness" }),
+  pnoReferralSource: t.String({ title: "Referral source" }),
   travelLegs: t.Array(travelLegInput, { minItems: 1, maxItems: 4, title: "Travel legs" })
 });
 
