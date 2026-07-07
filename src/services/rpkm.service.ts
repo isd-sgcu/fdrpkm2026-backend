@@ -28,10 +28,10 @@ const getHouse = async (id: string): Promise<House> => {
 };
 
 const checkinRegistration = (staffCunetId: string, studentCunetId: string) =>
-  checkinStudent({ studentCunetId, staffCunetId, project: "rpkm" });
+  checkinStudent({ studentCunetId, staffCunetId, project: "rpkm" }, { db });
 
 const checkinFreshmenNight = (staffCunetId: string, studentCunetId: string) =>
-  checkinStudent({ studentCunetId, staffCunetId, project: "freshmennight" });
+  checkinStudent({ studentCunetId, staffCunetId, project: "freshmennight" }, { db });
 
 export const RpkmService = {
   RpkmServiceError,
