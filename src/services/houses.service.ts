@@ -1,7 +1,7 @@
 import { count, eq, isNotNull } from "drizzle-orm";
 
 import { type AppErrorCode, isFreshman } from "@src/utils";
-import { db } from "@src/db";
+import { db as defaultDb, type Database } from "@src/db";
 import { groupHouseChoices, houses, registrations, type House } from "@src/db/schema";
 import { isEventActive } from "@src/utils/flags";
 import { GroupsService } from "@src/services/groups.service";
@@ -13,6 +13,8 @@ import { GroupsService } from "@src/services/groups.service";
  * reference shape (typed domain error, service owns storage).
  */
 
+export type HousesDeps = { db?: Database };
+
 /** Thrown on expected business failures; controller maps `code` to an HTTP status. */
 class HousesServiceError extends Error {
   constructor(public code: AppErrorCode) {
@@ -21,15 +23,19 @@ class HousesServiceError extends Error {
 }
 
 /** All houses. */
-const listHouses = (): Promise<House[]> => db.select().from(houses);
+const listHouses = (deps: HousesDeps = {}): Promise<House[]> => {
+  const database = deps.db ?? defaultDb;
+  return database.select().from(houses);
+};
 
 /**
  * A single house by id.
  * @param id `houses.id` (uuid)
  * @throws {HousesServiceError} NOT_FOUND if no `houses` row matches
  */
-const getHouse = async (id: string): Promise<House> => {
-  const [house] = await db.select().from(houses).where(eq(houses.id, id));
+const getHouse = async (id: string, deps: HousesDeps = {}): Promise<House> => {
+  const database = deps.db ?? defaultDb;
+  const [house] = await database.select().from(houses).where(eq(houses.id, id));
   if (!house) throw new HousesServiceError("NOT_FOUND");
 
   return house;
@@ -47,15 +53,16 @@ type HouseStat = {
  * roster "applies" to its top pick, not just the leader).
  * @returns one entry per house (including zero-applicant houses), sorted by count descending
  */
-const getHouseStats = async (): Promise<HouseStat[]> => {
-  const allHouses = await db.select({ id: houses.id, code: houses.code }).from(houses);
+const getHouseStats = async (deps: HousesDeps = {}): Promise<HouseStat[]> => {
+  const database = deps.db ?? defaultDb;
+  const allHouses = await database.select({ id: houses.id, code: houses.code }).from(houses);
 
-  const topChoices = await db
+  const topChoices = await database
     .select({ houseId: groupHouseChoices.houseId, groupId: groupHouseChoices.groupId })
     .from(groupHouseChoices)
     .where(eq(groupHouseChoices.rank, 1));
 
-  const memberCounts = await db
+  const memberCounts = await database
     .select({ groupId: registrations.groupId, count: count() })
     .from(registrations)
     .where(isNotNull(registrations.groupId))
@@ -86,20 +93,20 @@ const getHouseStats = async (): Promise<HouseStat[]> => {
  * @throws {HousesServiceError} NOT_FRESHMEN, RESULT_NOT_ANNOUNCED if before
  *   the announce time, NOT_FOUND if the student or their group can't be resolved
  */
-const getHouseResult = async (studentId: string): Promise<House | null> => {
+const getHouseResult = async (studentId: string, deps: HousesDeps = {}): Promise<House | null> => {
   if (!isFreshman(studentId)) throw new HousesServiceError("NOT_FRESHMEN");
   if (!isEventActive("rpkm_house_result")) throw new HousesServiceError("RESULT_NOT_ANNOUNCED");
 
   let group;
   try {
-    ({ group } = await GroupsService.getCurrentGroup(studentId));
+    ({ group } = await GroupsService.getCurrentGroup(studentId, deps));
   } catch (err) {
     if (err instanceof GroupsService.GroupsServiceError) throw new HousesServiceError(err.code);
     throw err;
   }
   if (!group.assignedHouseId) return null;
 
-  return getHouse(group.assignedHouseId);
+  return getHouse(group.assignedHouseId, deps);
 };
 
 // Namespace object — routes call `HousesService.<fn>(...)` instead of

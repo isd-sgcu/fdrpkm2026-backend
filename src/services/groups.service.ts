@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
-import { db } from "@src/db";
+import { db as defaultDb, type Database } from "@src/db";
 import { generateJoinCode, MAX_JOIN_CODE_ATTEMPTS } from "@src/utils";
 import {
   groupHouseChoices,
@@ -15,6 +15,8 @@ import {
 import type { AppErrorCode } from "@src/utils";
 import { isFreshman } from "@src/utils";
 import { isEventPassed } from "@src/utils/flags";
+
+export type GroupsDeps = { db?: Database };
 
 type GroupMember = {
   userId: string;
@@ -39,8 +41,12 @@ class GroupsServiceError extends Error {
  * @param studentId CUNET id, as derived by authMiddleware from the session email
  * @throws {GroupsServiceError} NOT_FOUND if no `students` row matches
  */
-const resolveCurrentStudent = async (studentId: string): Promise<Student> => {
-  const [student] = await db.select().from(students).where(eq(students.studentId, studentId));
+const resolveCurrentStudent = async (
+  studentId: string,
+  deps: GroupsDeps = {}
+): Promise<Student> => {
+  const database = deps.db ?? defaultDb;
+  const [student] = await database.select().from(students).where(eq(students.studentId, studentId));
   if (!student) throw new GroupsServiceError("NOT_FOUND");
   return student;
 };
@@ -49,8 +55,9 @@ const resolveCurrentStudent = async (studentId: string): Promise<Student> => {
  * All members of a group, with `isLeader` set for the one matching `group.leaderId`.
  * @param group the group to list members for
  */
-const getGroupMembers = async (group: Group): Promise<GroupMember[]> => {
-  const rows = await db
+const getGroupMembers = async (group: Group, deps: GroupsDeps = {}): Promise<GroupMember[]> => {
+  const database = deps.db ?? defaultDb;
+  const rows = await database
     .select({
       userId: students.id,
       firstName: students.firstName,
@@ -68,9 +75,12 @@ const getGroupMembers = async (group: Group): Promise<GroupMember[]> => {
  * A group row plus its members — the shape returned to `Groups.GroupWithMembers` callers.
  * @param group the group to attach members to
  */
-const getGroupWithMembers = async (group: Group): Promise<GroupWithMembers> => ({
+const getGroupWithMembers = async (
+  group: Group,
+  deps: GroupsDeps = {}
+): Promise<GroupWithMembers> => ({
   ...group,
-  members: await getGroupMembers(group)
+  members: await getGroupMembers(group, deps)
 });
 
 /**
@@ -78,8 +88,9 @@ const getGroupWithMembers = async (group: Group): Promise<GroupWithMembers> => (
  * @param studentId `students.id` (uuid), not the CUNET id
  * @throws {GroupsServiceError} NOT_FOUND if the student has no rpkm registration yet
  */
-const getCurrentRegistration = async (studentId: string) => {
-  const [registration] = await db
+const getCurrentRegistration = async (studentId: string, deps: GroupsDeps = {}) => {
+  const database = deps.db ?? defaultDb;
+  const [registration] = await database
     .select()
     .from(registrations)
     .where(and(eq(registrations.studentId, studentId), eq(registrations.project, "rpkm")));
@@ -93,12 +104,13 @@ const getCurrentRegistration = async (studentId: string) => {
  * @param studentId CUNET id (from authMiddleware)
  * @throws {GroupsServiceError} NOT_FOUND if the student, their registration, or their group can't be resolved
  */
-const getCurrentGroup = async (studentId: string) => {
-  const student = await resolveCurrentStudent(studentId);
-  const registration = await getCurrentRegistration(student.id);
+const getCurrentGroup = async (studentId: string, deps: GroupsDeps = {}) => {
+  const database = deps.db ?? defaultDb;
+  const student = await resolveCurrentStudent(studentId, deps);
+  const registration = await getCurrentRegistration(student.id, deps);
   if (!registration.groupId) throw new GroupsServiceError("NOT_FOUND");
 
-  const [group] = await db.select().from(groups).where(eq(groups.id, registration.groupId));
+  const [group] = await database.select().from(groups).where(eq(groups.id, registration.groupId));
   if (!group) throw new GroupsServiceError("NOT_FOUND");
 
   return { student, registration, group };
@@ -112,34 +124,39 @@ const getCurrentGroup = async (studentId: string) => {
  * @param joinCode 6-digit code identifying the target group
  * @throws {GroupsServiceError} NOT_FRESHMEN, INVALID_JOIN_CODE, LEADER_HAS_MEMBERS, GROUP_FULL, or ALREADY_CONFIRMED
  */
-const join = async (studentId: string, joinCode: string): Promise<GroupWithMembers> => {
+const join = async (
+  studentId: string,
+  joinCode: string,
+  deps: GroupsDeps = {}
+): Promise<GroupWithMembers> => {
+  const database = deps.db ?? defaultDb;
   if (!isFreshman(studentId)) throw new GroupsServiceError("NOT_FRESHMEN");
-  const student = await resolveCurrentStudent(studentId);
+  const student = await resolveCurrentStudent(studentId, deps);
 
-  const [targetGroup] = await db.select().from(groups).where(eq(groups.joinCode, joinCode));
+  const [targetGroup] = await database.select().from(groups).where(eq(groups.joinCode, joinCode));
   if (!targetGroup) throw new GroupsServiceError("INVALID_JOIN_CODE");
   if (targetGroup.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
 
-  const registration = await getCurrentRegistration(student.id);
+  const registration = await getCurrentRegistration(student.id, deps);
   const oldGroupId = registration.groupId;
 
   // already in this group — no-op success, skip leader/capacity checks and the write entirely.
-  if (oldGroupId === targetGroup.id) return getGroupWithMembers(targetGroup);
+  if (oldGroupId === targetGroup.id) return getGroupWithMembers(targetGroup, deps);
 
   if (oldGroupId) {
-    const [oldGroup] = await db.select().from(groups).where(eq(groups.id, oldGroupId));
+    const [oldGroup] = await database.select().from(groups).where(eq(groups.id, oldGroupId));
     if (oldGroup?.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
     if (oldGroup && oldGroup.leaderId === student.id) {
-      const oldMembers = await getGroupMembers(oldGroup);
+      const oldMembers = await getGroupMembers(oldGroup, deps);
       // a solo leader (no one else yet) may still hop groups; only blocked once someone's joined them.
       if (oldMembers.length > 1) throw new GroupsServiceError("LEADER_HAS_MEMBERS");
     }
   }
 
-  const targetMembers = await getGroupMembers(targetGroup);
+  const targetMembers = await getGroupMembers(targetGroup, deps);
   if (targetMembers.length >= 4) throw new GroupsServiceError("GROUP_FULL");
 
-  await db.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     await tx
       .update(registrations)
       .set({ groupId: targetGroup.id })
@@ -155,7 +172,7 @@ const join = async (studentId: string, joinCode: string): Promise<GroupWithMembe
     }
   });
 
-  return getGroupWithMembers(targetGroup);
+  return getGroupWithMembers(targetGroup, deps);
 };
 
 /**
@@ -163,9 +180,9 @@ const join = async (studentId: string, joinCode: string): Promise<GroupWithMembe
  * @param studentId CUNET id (from authMiddleware)
  * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
  */
-const getMyGroup = async (studentId: string): Promise<GroupWithMembers> => {
-  const { group } = await getCurrentGroup(studentId);
-  return getGroupWithMembers(group);
+const getMyGroup = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWithMembers> => {
+  const { group } = await getCurrentGroup(studentId, deps);
+  return getGroupWithMembers(group, deps);
 };
 
 /**
@@ -174,10 +191,12 @@ const getMyGroup = async (studentId: string): Promise<GroupWithMembers> => {
  * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
  */
 const getHousePreferences = async (
-  studentId: string
+  studentId: string,
+  deps: GroupsDeps = {}
 ): Promise<{ housePreferences: GroupHouseChoice[] }> => {
-  const { group } = await getCurrentGroup(studentId);
-  const housePreferences = await db
+  const database = deps.db ?? defaultDb;
+  const { group } = await getCurrentGroup(studentId, deps);
+  const housePreferences = await database
     .select()
     .from(groupHouseChoices)
     .where(eq(groupHouseChoices.groupId, group.id))
@@ -196,19 +215,21 @@ const getHousePreferences = async (
  */
 const setHousePreferences = async (
   studentId: string,
-  houseIds: string[]
+  houseIds: string[],
+  deps: GroupsDeps = {}
 ): Promise<{ housePreferences: GroupHouseChoice[] }> => {
-  const { student, group } = await getCurrentGroup(studentId);
+  const database = deps.db ?? defaultDb;
+  const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
   if (group.confirmedAt || isEventPassed("rpkm_house_pick"))
     throw new GroupsServiceError("HOUSE_PICK_CLOSED");
   if (houseIds.length < 1 || houseIds.length > 5) throw new GroupsServiceError("BAD_REQUEST");
   if (new Set(houseIds).size !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
 
-  const existingHouses = await db.select().from(houses).where(inArray(houses.id, houseIds));
+  const existingHouses = await database.select().from(houses).where(inArray(houses.id, houseIds));
   if (existingHouses.length !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
 
-  return db.transaction(async (tx) => {
+  return database.transaction(async (tx) => {
     await tx.delete(groupHouseChoices).where(eq(groupHouseChoices.groupId, group.id));
 
     const housePreferences = await tx
@@ -227,19 +248,20 @@ const setHousePreferences = async (
  * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved,
  *   NOT_LEADER if not the group's leader, ALREADY_CONFIRMED if the group is already confirmed
  */
-const regenerateJoinCode = async (studentId: string): Promise<string> => {
-  const { student, group } = await getCurrentGroup(studentId);
+const regenerateJoinCode = async (studentId: string, deps: GroupsDeps = {}): Promise<string> => {
+  const database = deps.db ?? defaultDb;
+  const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
   if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
 
   for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
     const joinCode = generateJoinCode();
-    const [existing] = await db
+    const [existing] = await database
       .select({ id: groups.id })
       .from(groups)
       .where(eq(groups.joinCode, joinCode));
     if (!existing) {
-      await db.update(groups).set({ joinCode }).where(eq(groups.id, group.id));
+      await database.update(groups).set({ joinCode }).where(eq(groups.id, group.id));
       return joinCode;
     }
   }
@@ -255,14 +277,15 @@ const regenerateJoinCode = async (studentId: string): Promise<string> => {
  * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved,
  *   ALREADY_CONFIRMED if the group is already confirmed
  */
-const leave = async (studentId: string): Promise<GroupWithMembers> => {
-  const { student, registration, group: oldGroup } = await getCurrentGroup(studentId);
+const leave = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWithMembers> => {
+  const database = deps.db ?? defaultDb;
+  const { student, registration, group: oldGroup } = await getCurrentGroup(studentId, deps);
   if (oldGroup.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
 
   const isLeader = oldGroup.leaderId === student.id;
-  const oldMembers = await getGroupMembers(oldGroup);
+  const oldMembers = await getGroupMembers(oldGroup, deps);
 
-  const newGroup = await db.transaction(async (tx) => {
+  const newGroup = await database.transaction(async (tx) => {
     const createSoloGroup = async (leaderId: string) => {
       for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
         const [group] = await tx
@@ -301,7 +324,7 @@ const leave = async (studentId: string): Promise<GroupWithMembers> => {
   });
 
   // read-only, doesn't need to be inside the transaction.
-  return getGroupWithMembers(newGroup);
+  return getGroupWithMembers(newGroup, deps);
 };
 
 /**
@@ -312,13 +335,18 @@ const leave = async (studentId: string): Promise<GroupWithMembers> => {
  *   resolved; NOT_LEADER if the caller isn't the group's leader; ALREADY_CONFIRMED if the
  *   group is already confirmed; BAD_REQUEST if the caller targets themselves (use leave instead)
  */
-const kickMember = async (studentId: string, targetUserId: string): Promise<GroupWithMembers> => {
-  const { student, group } = await getCurrentGroup(studentId);
+const kickMember = async (
+  studentId: string,
+  targetUserId: string,
+  deps: GroupsDeps = {}
+): Promise<GroupWithMembers> => {
+  const database = deps.db ?? defaultDb;
+  const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
   if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
   if (targetUserId === student.id) throw new GroupsServiceError("BAD_REQUEST");
 
-  const [targetRegistration] = await db
+  const [targetRegistration] = await database
     .select()
     .from(registrations)
     .where(
@@ -330,7 +358,7 @@ const kickMember = async (studentId: string, targetUserId: string): Promise<Grou
     );
   if (!targetRegistration) throw new GroupsServiceError("NOT_FOUND");
 
-  await db.transaction(async (tx) => {
+  await database.transaction(async (tx) => {
     let newGroup;
     for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
       const [created] = await tx
@@ -350,7 +378,7 @@ const kickMember = async (studentId: string, targetUserId: string): Promise<Grou
       .where(eq(registrations.id, targetRegistration.id));
   });
 
-  return getGroupWithMembers(group);
+  return getGroupWithMembers(group, deps);
 };
 
 /**
@@ -362,13 +390,17 @@ const kickMember = async (studentId: string, targetUserId: string): Promise<Grou
  * @throws {GroupsServiceError} NOT_FRESHMEN, NOT_FOUND if the student or their group can't
  *   be resolved, NOT_LEADER, ALREADY_CONFIRMED, or TOO_MANY_HOUSE_PREFS
  */
-const confirmGroup = async (studentId: string): Promise<{ confirmedAt: Date }> => {
+const confirmGroup = async (
+  studentId: string,
+  deps: GroupsDeps = {}
+): Promise<{ confirmedAt: Date }> => {
+  const database = deps.db ?? defaultDb;
   if (!isFreshman(studentId)) throw new GroupsServiceError("NOT_FRESHMEN");
-  const { student, group } = await getCurrentGroup(studentId);
+  const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
   if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
 
-  const preferences = await db
+  const preferences = await database
     .select()
     .from(groupHouseChoices)
     .where(eq(groupHouseChoices.groupId, group.id));
@@ -376,7 +408,7 @@ const confirmGroup = async (studentId: string): Promise<{ confirmedAt: Date }> =
   if (preferences.length > 5) throw new GroupsServiceError("TOO_MANY_HOUSE_PREFS");
 
   const confirmedAt = new Date();
-  await db.update(groups).set({ confirmedAt }).where(eq(groups.id, group.id));
+  await database.update(groups).set({ confirmedAt }).where(eq(groups.id, group.id));
   return { confirmedAt };
 };
 
