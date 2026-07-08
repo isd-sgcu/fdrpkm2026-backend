@@ -1,9 +1,7 @@
-import { randomInt } from "node:crypto";
-
 import { and, eq } from "drizzle-orm";
 
 import type { AppErrorCode } from "@src/utils";
-import { isFreshman, deriveStudentId } from "@src/utils";
+import { generateJoinCode, isFreshman, deriveStudentId, MAX_JOIN_CODE_ATTEMPTS } from "@src/utils";
 import { db as defaultDb, type Database } from "@src/db";
 import {
   groups,
@@ -141,7 +139,7 @@ export type MeResult = {
 };
 
 /** Injectable dependencies — routes use the defaults; tests pass a migrated
- * PGlite db and a deterministic code generator. */
+ * PGlite db and/or a deterministic code generator (to force join-code collision). */
 export type RegisterDeps = { db?: Database; genCode?: () => string };
 
 const MIN_TRAVEL_LEGS = 1;
@@ -150,9 +148,6 @@ const MAX_TRAVEL_LEGS = 4;
 // arrives at the event); shorter journeys keep the frontend-supplied value.
 const FORCE_DESTINATION_AT_LENGTH = 4;
 const FIXED_LAST_DESTINATION = { district: "Pathum Wan", province: "Bangkok" } as const;
-const JOIN_CODE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const JOIN_CODE_LENGTH = 6;
-const MAX_JOIN_CODE_ATTEMPTS = 10;
 
 /** Thrown on expected business failures; the controller maps `code` to an
  * HTTP status and surfaces `message` to the caller. */
@@ -176,17 +171,6 @@ const toGroupView = (group: Group): GroupView => ({
   joinCode: group.joinCode,
   assignedHouseId: group.assignedHouseId
 });
-
-/** 6 chars, A-Z + 0-9. It's a group-join credential, so use a CSPRNG
- * (`crypto.randomInt`), not `Math.random()`. Uniqueness is enforced against
- * the `groups.join_code` unique index. */
-export const generateJoinCode = (): string => {
-  let code = "";
-  for (let i = 0; i < JOIN_CODE_LENGTH; i += 1) {
-    code += JOIN_CODE_ALPHABET[randomInt(JOIN_CODE_ALPHABET.length)];
-  }
-  return code;
-};
 
 /** Collect the `students` profile columns the client actually sent, so a
  * partial payload doesn't clobber stored values on the upsert's conflict set. */

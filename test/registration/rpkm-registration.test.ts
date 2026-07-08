@@ -6,9 +6,10 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 
 import type { Database } from "../../src/db";
 import * as schema from "../../src/db/schema";
+import { generateJoinCode } from "../../src/utils";
 import { RpkmRegistrationService } from "../../src/services/rpkm-registration.service";
 
-const { registerRpkm, getMe, getProfile, generateJoinCode } = RpkmRegistrationService;
+const { registerRpkm, getMe, getProfile } = RpkmRegistrationService;
 
 // Real Postgres (pglite, in-memory WASM) with the generated migrations applied,
 // so these exercise the actual constraints + transactions. The service takes an
@@ -265,7 +266,7 @@ describe("registerRpkm — join code", () => {
     expect(result.group.joinCode).toBe("BBBBBB");
   });
 
-  it("rolls the whole transaction back when a unique code can't be found", async () => {
+  it("rolls the whole transaction back when all 10 attempts hit a collision", async () => {
     const [leader] = await db
       .insert(schema.students)
       .values({
@@ -277,6 +278,7 @@ describe("registerRpkm — join code", () => {
       .returning();
     await db.insert(schema.groups).values({ leaderId: leader.id, joinCode: "AAAAAA" });
 
+    // Always return the same colliding code — exhausts all 10 attempts.
     const genCode = () => "AAAAAA";
 
     await expect(
@@ -284,7 +286,7 @@ describe("registerRpkm — join code", () => {
     ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
 
     const students = await db.select().from(schema.students);
-    expect(students).toHaveLength(1); // only the seeded leader
+    expect(students).toHaveLength(1); // only the seeded leader — tx rolled back
     expect(await db.select().from(schema.registrations)).toHaveLength(0);
   });
 });

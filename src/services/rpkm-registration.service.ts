@@ -1,5 +1,4 @@
 import {
-  generateJoinCode,
   getRegistrationMe,
   getRegistrationProfile,
   RegistrationServiceError,
@@ -51,6 +50,5 @@ export const RpkmRegistrationService = {
   RpkmRegistrationServiceError: RegistrationServiceError,
   registerRpkm,
   getMe,
-  getProfile,
-  generateJoinCode
+  getProfile
 };

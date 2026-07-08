@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@src/db";
+import { generateJoinCode, MAX_JOIN_CODE_ATTEMPTS } from "@src/utils";
 import {
   groupHouseChoices,
   groups,
@@ -101,32 +102,6 @@ const getCurrentGroup = async (studentId: string) => {
   if (!group) throw new GroupsServiceError("NOT_FOUND");
 
   return { student, registration, group };
-};
-
-const JOIN_CODE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const JOIN_CODE_LENGTH = 6;
-
-// `db` itself, or the `tx` a transaction callback receives — accepting either
-// lets generateJoinCode be called from inside db.transaction(...) without
-// opening a second connection (which can deadlock the pool).
-type DbClient = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
-
-/**
- * A random unused 6-character join code, uppercase letters + digits (see groups.model.ts's joinCode pattern).
- * @param client `db` or an in-progress transaction's `tx` — pass `tx` when calling from
- *   inside `db.transaction(...)` so this doesn't open a second connection and deadlock the pool.
- * @throws {GroupsServiceError} INTERNAL_SERVER_ERROR if no unused code is found after 10 tries
- */
-const generateJoinCode = async (client: DbClient = db): Promise<string> => {
-  for (let i = 0; i < 10; i++) {
-    let code = "";
-    for (let j = 0; j < JOIN_CODE_LENGTH; j++)
-      code += JOIN_CODE_CHARS[Math.floor(Math.random() * JOIN_CODE_CHARS.length)];
-
-    const [existing] = await client.select().from(groups).where(eq(groups.joinCode, code));
-    if (!existing) return code;
-  }
-  throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
 };
 
 // --- Public API (same order as the routes in src/routes/rpkm/groups.ts) ---
@@ -257,9 +232,18 @@ const regenerateJoinCode = async (studentId: string): Promise<string> => {
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
   if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
 
-  const joinCode = await generateJoinCode();
-  await db.update(groups).set({ joinCode }).where(eq(groups.id, group.id));
-  return joinCode;
+  for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
+    const joinCode = generateJoinCode();
+    const [existing] = await db
+      .select({ id: groups.id })
+      .from(groups)
+      .where(eq(groups.joinCode, joinCode));
+    if (!existing) {
+      await db.update(groups).set({ joinCode }).where(eq(groups.id, group.id));
+      return joinCode;
+    }
+  }
+  throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
 };
 
 /**
@@ -280,9 +264,15 @@ const leave = async (studentId: string): Promise<GroupWithMembers> => {
 
   const newGroup = await db.transaction(async (tx) => {
     const createSoloGroup = async (leaderId: string) => {
-      const joinCode = await generateJoinCode(tx);
-      const [group] = await tx.insert(groups).values({ leaderId, joinCode }).returning();
-      return group;
+      for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
+        const [group] = await tx
+          .insert(groups)
+          .values({ leaderId, joinCode: generateJoinCode() })
+          .onConflictDoNothing({ target: groups.joinCode })
+          .returning();
+        if (group) return group;
+      }
+      throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
     };
 
     const newGroup = await createSoloGroup(student.id);
@@ -341,11 +331,19 @@ const kickMember = async (studentId: string, targetUserId: string): Promise<Grou
   if (!targetRegistration) throw new GroupsServiceError("NOT_FOUND");
 
   await db.transaction(async (tx) => {
-    const joinCode = await generateJoinCode(tx);
-    const [newGroup] = await tx
-      .insert(groups)
-      .values({ leaderId: targetUserId, joinCode })
-      .returning();
+    let newGroup;
+    for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
+      const [created] = await tx
+        .insert(groups)
+        .values({ leaderId: targetUserId, joinCode: generateJoinCode() })
+        .onConflictDoNothing({ target: groups.joinCode })
+        .returning();
+      if (created) {
+        newGroup = created;
+        break;
+      }
+    }
+    if (!newGroup) throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
     await tx
       .update(registrations)
       .set({ groupId: newGroup.id })
