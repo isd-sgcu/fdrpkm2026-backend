@@ -3,3 +3,4 @@ export * from "./error";
 export * from "./flags";
 export * from "./response";
 export * from "./storage";
+export * from "./student";

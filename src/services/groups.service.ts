@@ -12,6 +12,7 @@ import {
   type Student
 } from "@src/db/schema";
 import type { AppErrorCode } from "@src/utils";
+import { isFreshman } from "@src/utils";
 import { isEventPassed } from "@src/utils/flags";
 
 type GroupMember = {
@@ -31,13 +32,6 @@ class GroupsServiceError extends Error {
 }
 
 // --- Helpers (private) ---
-
-/**
- * Whether a CUNET id belongs to a year-one (freshman) student.
- * @param studentId CUNET id, e.g. "6712345678" — year is never stored, only derived from this prefix.
- * @returns true if `studentId` starts with "69"
- */
-const isFreshman = (studentId: string): boolean => studentId.startsWith("69");
 
 /**
  * Resolves the `students` row for a CUNET id.

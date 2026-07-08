@@ -28,7 +28,7 @@ const TABLES = [
 type AuthUser = { id: string; email: string; name: string };
 const authUser = (over: Partial<AuthUser> = {}): AuthUser => ({
   id: "student-1-id",
-  email: "student1@student.chula.ac.th",
+  email: "6912345678@student.chula.ac.th",
   name: "Student One",
   ...over
 });
@@ -199,12 +199,12 @@ describe("Production Flow Integration Tests", () => {
     // 2. staff tries to register FD -> rejected
     await expect(
       FdRegistrationService.registerFd(staffUser, validInput(), injected())
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
 
     // 3. staff tries to register RPKM -> rejected
     await expect(
       RpkmRegistrationService.registerRpkm(staffUser, validInput(), injected())
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
   });
 
   // --- EDGE CASES ---
@@ -231,13 +231,13 @@ describe("Production Flow Integration Tests", () => {
 
     const fdMe = await FdRegistrationService.getProfile(user, injected());
     expect(fdMe.user.id).toBeNull();
-    expect(fdMe.user.studentId).toBe("student1");
+    expect(fdMe.user.studentId).toBe("6912345678");
     expect(fdMe.registration).toBeNull();
     expect(fdMe.travelLegs).toEqual([]);
 
     const rpkmMe = await RpkmRegistrationService.getProfile(user, injected());
     expect(rpkmMe.user.id).toBeNull();
-    expect(rpkmMe.user.studentId).toBe("student1");
+    expect(rpkmMe.user.studentId).toBe("6912345678");
     expect(rpkmMe.registration).toBeNull();
     expect(rpkmMe.travelLegs).toEqual([]);
   });
@@ -281,7 +281,7 @@ describe("Production Flow Integration Tests", () => {
     const fdMeUnregistered = await FdRegistrationService.getMe(user, injected());
     expect(fdMeUnregistered).toEqual({
       id: null,
-      studentId: "student1",
+      studentId: "6912345678",
       firstName: "Student",
       lastName: "One",
       role: "student",
@@ -295,7 +295,7 @@ describe("Production Flow Integration Tests", () => {
     const fdMeRegistered = await FdRegistrationService.getMe(user, injected());
     expect(fdMeRegistered).toEqual({
       id: regResult.userId,
-      studentId: "student1",
+      studentId: "6912345678",
       firstName: "Student",
       lastName: "One",
       role: "student",

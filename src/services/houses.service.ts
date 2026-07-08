@@ -1,6 +1,6 @@
 import { count, eq, isNotNull } from "drizzle-orm";
 
-import type { AppErrorCode } from "@src/utils";
+import { type AppErrorCode, isFreshman } from "@src/utils";
 import { db } from "@src/db";
 import { groupHouseChoices, houses, registrations, type House } from "@src/db/schema";
 import { isEventActive } from "@src/utils/flags";
@@ -87,7 +87,7 @@ const getHouseStats = async (): Promise<HouseStat[]> => {
  *   the announce time, NOT_FOUND if the student or their group can't be resolved
  */
 const getHouseResult = async (studentId: string): Promise<House | null> => {
-  if (!GroupsService.isFreshman(studentId)) throw new HousesServiceError("NOT_FRESHMEN");
+  if (!isFreshman(studentId)) throw new HousesServiceError("NOT_FRESHMEN");
   if (!isEventActive("rpkm_house_result")) throw new HousesServiceError("RESULT_NOT_ANNOUNCED");
 
   let group;

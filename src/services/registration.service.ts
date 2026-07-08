@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 
 import type { AppErrorCode } from "@src/utils";
+import { isFreshman, deriveStudentId } from "@src/utils";
 import { db as defaultDb, type Database } from "@src/db";
 import {
   groups,
@@ -164,11 +165,6 @@ export class RegistrationServiceError extends Error {
   }
 }
 
-/** Chula email local-part is the CUNET student id (the QR payload + SSO key).
- * Lowercased so it's stable across email casings and matches the
- * case-insensitive `students.email` unique index. */
-const deriveStudentId = (email: string): string => (email.split("@")[0] || email).toLowerCase();
-
 const splitName = (name: string): { firstName: string; lastName: string } => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") };
@@ -234,15 +230,8 @@ export const submitRegistration = async (
 
   const derivedStudentId = deriveStudentId(authUser.email);
 
-  // Prevent pre-seeded staff calling this api.
-  const [existingStudent] = await database
-    .select()
-    .from(students)
-    .where(eq(students.studentId, derivedStudentId))
-    .limit(1);
-
-  if (existingStudent?.role === "staff") {
-    throw new RegistrationServiceError("FORBIDDEN", "error_staff_not_allowed");
+  if (!isFreshman(derivedStudentId)) {
+    throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
   }
 
   if (input.pdpaConsent !== true) {

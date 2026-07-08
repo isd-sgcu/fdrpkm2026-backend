@@ -3,7 +3,13 @@ import { authMiddleware } from "@src/routes/auth";
 import { HousesModel } from "@src/models/houses.model";
 import { GroupsService } from "@src/services/groups.service";
 import { HousesService } from "@src/services/houses.service";
-import { errorResponse, successResponse, tErrorResponse, tSuccessResponse } from "@src/utils";
+import {
+  errorResponse,
+  successResponse,
+  tErrorResponse,
+  tSuccessResponse,
+  isFreshman
+} from "@src/utils";
 
 export const houseRoute = new Elysia({ prefix: "/houses" })
   .use(authMiddleware)
@@ -20,7 +26,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
   .get(
     "/stats",
     async ({ studentId, status }) => {
-      if (!GroupsService.isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
+      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
       return HousesService.getHouseStats();
     },
     {

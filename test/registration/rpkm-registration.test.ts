@@ -290,14 +290,11 @@ describe("registerRpkm — join code", () => {
 });
 
 describe("registerRpkm — access control", () => {
-  it("allows any authenticated user to register (not only freshmen)", async () => {
-    const result = await registerRpkm(
-      authUser({ email: "6612345678@student.chula.ac.th" }),
-      validInput(),
-      injected()
-    );
-    expect(result.userId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(await db.select().from(schema.students)).toHaveLength(1);
+  it("rejects non-freshmen registration", async () => {
+    await expect(
+      registerRpkm(authUser({ email: "6612345678@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+    expect(await db.select().from(schema.registrations)).toHaveLength(0);
   });
 
   it("prevent pre-seeded staff from registering", async () => {
@@ -312,7 +309,7 @@ describe("registerRpkm — access control", () => {
 
     await expect(
       registerRpkm(authUser({ email: "staffuser@student.chula.ac.th" }), validInput(), injected())
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
   });
 
   it("allows non-freshman to call getProfile", async () => {

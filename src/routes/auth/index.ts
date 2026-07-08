@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { auth, errorResponse } from "@src/utils";
+import { auth, errorResponse, deriveStudentId } from "@src/utils";
 
 export const authMiddleware = new Elysia({ name: "better-auth" }).mount(auth.handler).macro({
   auth: {
@@ -10,7 +10,7 @@ export const authMiddleware = new Elysia({ name: "better-auth" }).mount(auth.han
 
       if (!session) return status(401, errorResponse("UNAUTHORIZED"));
 
-      const studentId = session.user?.email?.split("@")[0];
+      const studentId = deriveStudentId(session.user.email);
       return {
         user: session.user,
         session: session.session,
