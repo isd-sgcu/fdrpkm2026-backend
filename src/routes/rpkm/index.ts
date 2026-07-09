@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { authMiddleware } from "@src/routes/auth";
+import { gameRoute } from "./games";
 import { groupRoute } from "./groups";
 import { houseRoute } from "./houses";
 
@@ -11,4 +12,5 @@ export const rpkmRoutes = new Elysia({ prefix: "/rpkm" })
   .use(authMiddleware)
   .use(groupRoute)
   .use(houseRoute)
+  .use(gameRoute)
   .get("/", () => ({ project: "rpkm" }), { auth: true });
