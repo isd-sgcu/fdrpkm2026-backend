@@ -50,6 +50,9 @@ const leg = (over: Record<string, unknown> = {}) => ({
 // A valid minimal registration — travelLegs are required now (1..4).
 const validInput = (over: Record<string, unknown> = {}) => ({
   pdpaConsent: true,
+  csoDistrict: "Suthep",
+  csoProvince: "Chiang Mai",
+  attendedDays: 3,
   travelLegs: [leg()],
   ...over
 });
@@ -338,8 +341,12 @@ describe("getProfile", () => {
     expect(me.user.firstName).toBe("ก้อง");
     expect(me.user.nickname).toBe("Kong");
     expect(me.user.pnoSgcuAwareness).toBe("instagram"); // on user, not registration
+    expect(me.user.csoDistrict).toBe("Suthep");
+    expect(me.user.csoProvince).toBe("Chiang Mai");
+    expect(me.user.bottle).toBeNull();
     expect(me.registration?.pdpaConsent).toBe(true);
     expect(me.registration?.pnoReferralSource).toBe("friend");
+    expect(me.registration?.attendedDays).toBe(3);
     expect(me.travelLegs).toHaveLength(1);
     expect(me.group?.leaderId).toBe(me.user.id!);
   });
@@ -349,6 +356,9 @@ describe("getProfile", () => {
     expect(me.user.id).toBeNull();
     expect(me.user.studentId).toBe("6912345678");
     expect(me.user.pnoSgcuAwareness).toBeNull();
+    expect(me.user.csoDistrict).toBeNull();
+    expect(me.user.csoProvince).toBeNull();
+    expect(me.user.bottle).toBeNull();
     expect(me.user.nickname).toBeNull();
     expect(me.registration).toBeNull();
     expect(me.travelLegs).toEqual([]);
@@ -380,5 +390,11 @@ describe("getMe (RPKM) - debloated", () => {
       role: "student",
       registered: false
     });
+  });
+
+  it("throws NOT_FRESHMEN for non-freshman when student record is absent", async () => {
+    await expect(
+      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
   });
 });

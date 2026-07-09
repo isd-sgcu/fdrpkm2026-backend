@@ -50,6 +50,8 @@ export const registrationFields = () => {
     medicalNotes: t.String({ title: "Medical notes" }),
     pnoSgcuAwareness: t.String({ title: "SGCU awareness" }),
     pnoReferralSource: t.String({ title: "Referral source" }),
+    csoDistrict: t.String({ title: "CSO district" }),
+    csoProvince: t.String({ title: "CSO province" }),
     travelLegs: t.Array(travelLegInput, { minItems: 1, maxItems: 4, title: "Travel legs" })
   });
 
@@ -70,7 +72,10 @@ export const registrationFields = () => {
     allergies: t.Nullable(t.String()),
     dietary: t.Nullable(t.String()),
     medicalNotes: t.Nullable(t.String()),
-    pnoSgcuAwareness: t.Nullable(t.String())
+    pnoSgcuAwareness: t.Nullable(t.String()),
+    csoDistrict: t.Nullable(t.String()),
+    csoProvince: t.Nullable(t.String()),
+    bottle: t.Nullable(t.Boolean())
   });
 
   const meRegistration = t.Object({

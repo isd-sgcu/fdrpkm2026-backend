@@ -13,6 +13,20 @@ import { registrationFields } from "./registration-fields";
  */
 const f = registrationFields();
 
+const rpkmRegistrationBody = t.Composite([
+  f.registrationBody,
+  t.Object({
+    attendedDays: t.Integer({ title: "Attended days" })
+  })
+]);
+
+const rpkmRegistration = t.Composite([
+  f.meRegistration,
+  t.Object({
+    attendedDays: t.Nullable(t.Integer())
+  })
+]);
+
 const groupView = t.Object({
   id: t.String({ format: "uuid" }),
   leaderId: t.String({ format: "uuid" }),
@@ -29,10 +43,12 @@ const registrationResult = t.Object({
 // Stable shape: registration/group null + travelLegs [] when unregistered.
 const profileResult = t.Object({
   user: f.meUser,
-  registration: t.Nullable(f.meRegistration),
+  registration: t.Nullable(rpkmRegistration),
   travelLegs: t.Array(f.travelLegView),
   group: t.Nullable(groupView)
 });
+
+export type RpkmProfileResult = (typeof profileResult)["static"];
 
 const meResult = t.Object({
   id: t.Nullable(t.String()),
@@ -44,7 +60,7 @@ const meResult = t.Object({
 });
 
 export const RpkmRegistrationModel = new Elysia().model({
-  registrationBody: f.registrationBody,
+  registrationBody: rpkmRegistrationBody,
   registrationResponse: tSuccessResponse(registrationResult),
   meResponse: tSuccessResponse(meResult),
   profileResponse: tSuccessResponse(profileResult)

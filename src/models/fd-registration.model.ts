@@ -25,6 +25,8 @@ const profileResult = t.Object({
   travelLegs: t.Array(f.travelLegView)
 });
 
+export type FdProfileResult = (typeof profileResult)["static"];
+
 const meResult = t.Object({
   id: t.Nullable(t.String()),
   studentId: t.String(),

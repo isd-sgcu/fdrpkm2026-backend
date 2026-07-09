@@ -22,7 +22,7 @@ erDiagram
         uuid id PK
         text student_id UK "QR payload; 69%% = year one"
         text email UK "from Chula SSO"
-        text prefix "NN default not_specified; mr|mrs|ms|not_specified|other"
+        text prefix "NN default not_specified; mr/mrs/ms/not_specified/other"
         text first_name
         text last_name
         text nickname
@@ -36,24 +36,28 @@ erDiagram
         text allergies
         text dietary
         text medical_notes
-        text role "student | staff"
+        text role "student or staff"
         text pno_sgcu_awareness "survey (P&O)"
+        text cso_district "CSO home sub-district"
+        text cso_province "CSO home province"
+        boolean bottle "Did bring water bottle"
     }
     registrations {
         uuid id PK
         uuid student_id FK
-        text project "firstdate | rpkm"
+        text project "firstdate or rpkm"
         timestamptz pdpa_accepted_at
         int attended_days "RPKM carbon"
         uuid group_id FK "RPKM only; holds membership (1:1)"
         text pno_referral_source "survey (P&O)"
+        text staff_role "firstdate or rpkm or walkrally or freshmennight"
         unique student_project "uniq(student_id, project)"
     }
     travel_legs {
         uuid id PK
         uuid registration_id FK
         int seq "1 or 2"
-        text vehicle "8 types + other"
+        text vehicle "8 types or other"
         text vehicle_other
         text origin_district "free text"
         text origin_province "free text"
@@ -64,13 +68,13 @@ erDiagram
         uuid id PK
         uuid student_id FK "freshman who entered"
         uuid scanned_by FK "staff"
-        text event "firstdate | freshmennight | rpkm"
+        text event "firstdate or freshmennight or rpkm"
         timestamptz scanned_at
         unique student_event "uniq(student_id, event)"
     }
     checkpoints {
         uuid id PK
-        text game "jigsaw (10) | csr (35)"
+        text game "jigsaw (10) or csr (35)"
         text code UK "QR payload"
         numeric lat
         numeric lng

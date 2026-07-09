@@ -1,3 +1,4 @@
+import { type RpkmProfileResult } from "@src/models/rpkm-registration.model";
 import {
   getRegistrationMe,
   getRegistrationProfile,
@@ -6,7 +7,6 @@ import {
   type AuthUser,
   type GroupView,
   type MeResult,
-  type ProfileResult,
   type RegisterDeps,
   type RegisterResult,
   type RegistrationInput
@@ -39,10 +39,29 @@ const registerRpkm = async (
 const getMe = (authUser: AuthUser, deps: { db?: RegisterDeps["db"] } = {}): Promise<MeResult> =>
   getRegistrationMe(authUser, "rpkm", deps);
 
-const getProfile = (
+const getProfile = async (
   authUser: AuthUser,
   deps: { db?: RegisterDeps["db"] } = {}
-): Promise<ProfileResult> => getRegistrationProfile(authUser, "rpkm", deps);
+): Promise<RpkmProfileResult> => {
+  const { user, registration, travelLegs, group } = await getRegistrationProfile(
+    authUser,
+    "rpkm",
+    deps
+  );
+  if (registration) {
+    return {
+      user,
+      registration: {
+        pdpaConsent: registration.pdpaConsent,
+        pnoReferralSource: registration.pnoReferralSource,
+        attendedDays: registration.attendedDays ?? null
+      },
+      travelLegs,
+      group
+    };
+  }
+  return { user, registration: null, travelLegs, group };
+};
 
 // Namespace object — routes call `RpkmRegistrationService.<fn>(...)`. The error
 // class is the shared one; the alias keeps the route's instanceof check stable.

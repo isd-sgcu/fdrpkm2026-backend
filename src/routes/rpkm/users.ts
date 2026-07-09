@@ -82,6 +82,11 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
       try {
         return successResponse(await RpkmRegistrationService.getMe(user));
       } catch (err) {
+        if (err instanceof RpkmRegistrationService.RpkmRegistrationServiceError) {
+          if (err.code === "NOT_FRESHMEN") {
+            return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
+          }
+        }
         console.error("[rpkm /me] unexpected error:", err);
         return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
       }
@@ -91,6 +96,7 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
       response: {
         200: "RpkmUser.MeResponse",
         401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }

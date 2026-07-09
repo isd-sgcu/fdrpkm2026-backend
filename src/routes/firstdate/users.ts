@@ -79,6 +79,11 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       try {
         return successResponse(await FdRegistrationService.getMe(user));
       } catch (err) {
+        if (err instanceof FdRegistrationService.FdRegistrationServiceError) {
+          if (err.code === "NOT_FRESHMEN") {
+            return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
+          }
+        }
         console.error("[fd /me] unexpected error:", err);
         return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
       }
@@ -88,6 +93,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       response: {
         200: "FdUser.MeResponse",
         401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }

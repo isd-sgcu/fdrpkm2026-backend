@@ -44,6 +44,9 @@ const leg = (over: Record<string, unknown> = {}) => ({
 
 const validInput = (over: Record<string, unknown> = {}) => ({
   pdpaConsent: true,
+  csoDistrict: "Suthep",
+  csoProvince: "Chiang Mai",
+  attendedDays: 3,
   travelLegs: [leg()],
   ...over
 });
@@ -79,6 +82,9 @@ describe("Production Flow Integration Tests", () => {
     expect(me.user.id).toBe(regResult.userId);
     expect(me.user.nickname).toBe("One");
     expect(me.user.pnoSgcuAwareness).toBe("instagram");
+    expect(me.user.csoDistrict).toBe("Suthep");
+    expect(me.user.csoProvince).toBe("Chiang Mai");
+    expect(me.user.bottle).toBeNull();
     expect(me.registration).not.toBeNull();
     expect(me.registration?.pdpaConsent).toBe(true);
     expect(me.travelLegs).toHaveLength(1);
@@ -126,6 +132,7 @@ describe("Production Flow Integration Tests", () => {
     expect(me.user.nickname).toBe("RpkmOnly");
     expect(me.registration).not.toBeNull();
     expect(me.registration?.pdpaConsent).toBe(true);
+    expect(me.registration?.attendedDays).toBe(3);
     expect(me.travelLegs).toHaveLength(1);
     expect(me.group).not.toBeNull();
     expect(me.group?.id).toBe(regResult.group.id);

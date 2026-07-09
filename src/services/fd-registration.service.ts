@@ -1,3 +1,4 @@
+import { type FdProfileResult } from "@src/models/fd-registration.model";
 import {
   getRegistrationMe,
   getRegistrationProfile,
@@ -5,7 +6,6 @@ import {
   submitRegistration,
   type AuthUser,
   type MeResult,
-  type ProfileResult,
   type RegisterDeps,
   type RegisterResult,
   type RegistrationInput
@@ -21,7 +21,6 @@ import {
 // FirstDate results never carry a group.
 export type FdRegisterResult = Omit<RegisterResult, "group">;
 export type FdMeResult = MeResult;
-export type FdProfileResult = Omit<ProfileResult, "group">;
 
 const registerFd = async (
   authUser: AuthUser,
@@ -53,7 +52,17 @@ const getProfile = async (
     "firstdate",
     deps
   );
-  return { user, registration, travelLegs };
+  if (registration) {
+    return {
+      user,
+      registration: {
+        pdpaConsent: registration.pdpaConsent,
+        pnoReferralSource: registration.pnoReferralSource
+      },
+      travelLegs
+    };
+  }
+  return { user, registration: null, travelLegs };
 };
 
 // Namespace object — routes call `FdRegistrationService.<fn>(...)`.

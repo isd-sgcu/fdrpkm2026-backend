@@ -46,6 +46,8 @@ const leg = (over: Record<string, unknown> = {}) => ({
 
 const validInput = (over: Record<string, unknown> = {}) => ({
   pdpaConsent: true,
+  csoDistrict: "Suthep",
+  csoProvince: "Chiang Mai",
   travelLegs: [leg()],
   ...over
 });
@@ -211,6 +213,9 @@ describe("getProfile (FirstDate)", () => {
     const me = await getProfile(authUser(), injected());
     expect(me.user.studentId).toBe("6912345678");
     expect(me.user.pnoSgcuAwareness).toBe("instagram");
+    expect(me.user.csoDistrict).toBe("Suthep");
+    expect(me.user.csoProvince).toBe("Chiang Mai");
+    expect(me.user.bottle).toBeNull(); // not sent in registrationBody, defaults null
     expect(me.registration?.pdpaConsent).toBe(true);
     expect(me.travelLegs).toHaveLength(1);
     expect("group" in me).toBe(false);
@@ -220,6 +225,9 @@ describe("getProfile (FirstDate)", () => {
     const me = await getProfile(authUser(), injected());
     expect(me.user.id).toBeNull();
     expect(me.user.pnoSgcuAwareness).toBeNull();
+    expect(me.user.csoDistrict).toBeNull();
+    expect(me.user.csoProvince).toBeNull();
+    expect(me.user.bottle).toBeNull();
     expect(me.registration).toBeNull();
     expect(me.travelLegs).toEqual([]);
   });
@@ -249,6 +257,12 @@ describe("getMe (FirstDate) - debloated", () => {
       role: "student",
       registered: false
     });
+  });
+
+  it("throws NOT_FRESHMEN for non-freshman when student record is absent", async () => {
+    await expect(
+      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
   });
 });
 

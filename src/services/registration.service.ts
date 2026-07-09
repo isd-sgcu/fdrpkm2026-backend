@@ -72,6 +72,11 @@ export type RegistrationInput = {
   pnoSgcuAwareness?: string | null;
   // Registration-specific.
   pnoReferralSource?: string | null;
+  // CSO: student's home sub-district and province (free text).
+  csoDistrict?: string | null;
+  csoProvince?: string | null;
+  bottle?: boolean | null;
+  attendedDays?: number;
   travelLegs?: TravelLegInput[];
 };
 
@@ -109,6 +114,9 @@ export type MeUser = {
   // of `registration` so the frontend can prefill it even before this project's
   // registration exists.
   pnoSgcuAwareness: string | null;
+  csoDistrict: string | null;
+  csoProvince: string | null;
+  bottle: boolean | null;
 };
 
 export type ProfileResult = {
@@ -116,6 +124,7 @@ export type ProfileResult = {
   registration: {
     pdpaConsent: boolean;
     pnoReferralSource: string | null;
+    attendedDays?: number | null;
   } | null;
   travelLegs: Array<{
     seq: number;
@@ -190,6 +199,8 @@ const collectProfile = (input: RegistrationInput): Partial<NewStudent> => {
   if (input.dietary !== undefined) profile.dietary = input.dietary;
   if (input.medicalNotes !== undefined) profile.medicalNotes = input.medicalNotes;
   if (input.pnoSgcuAwareness !== undefined) profile.pnoSgcuAwareness = input.pnoSgcuAwareness;
+  if (input.csoDistrict !== undefined) profile.csoDistrict = input.csoDistrict;
+  if (input.csoProvince !== undefined) profile.csoProvince = input.csoProvince;
   return profile;
 };
 
@@ -270,7 +281,8 @@ export const submitRegistration = async (
         studentId: student.id,
         project: options.project,
         pdpaAcceptedAt: new Date(),
-        pnoReferralSource: input.pnoReferralSource ?? null
+        pnoReferralSource: input.pnoReferralSource ?? null,
+        attendedDays: input.attendedDays ?? null
       })
       .onConflictDoNothing({ target: [registrations.studentId, registrations.project] })
       .returning();
@@ -349,7 +361,10 @@ const toMeUser = (student: Student): MeUser => ({
   allergies: student.allergies,
   dietary: student.dietary,
   medicalNotes: student.medicalNotes,
-  pnoSgcuAwareness: student.pnoSgcuAwareness
+  pnoSgcuAwareness: student.pnoSgcuAwareness,
+  csoDistrict: student.csoDistrict,
+  csoProvince: student.csoProvince,
+  bottle: student.bottle
 });
 
 /**
@@ -374,6 +389,9 @@ export const getRegistrationMe = async (
     .limit(1);
 
   if (!student) {
+    if (!isFreshman(studentId)) {
+      throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+    }
     const { firstName, lastName } = splitName(authUser.name);
     return {
       id: null,
@@ -433,7 +451,10 @@ export const getRegistrationProfile = async (
         allergies: null,
         dietary: null,
         medicalNotes: null,
-        pnoSgcuAwareness: null
+        pnoSgcuAwareness: null,
+        csoDistrict: null,
+        csoProvince: null,
+        bottle: null
       },
       registration: null,
       travelLegs: [],
@@ -480,7 +501,11 @@ export const getRegistrationProfile = async (
     // A registration only exists once PDPA was accepted (pdpa_accepted_at is
     // NOT NULL), so consent is always true here.
     registration: registration
-      ? { pdpaConsent: true, pnoReferralSource: registration.pnoReferralSource }
+      ? {
+          pdpaConsent: true,
+          pnoReferralSource: registration.pnoReferralSource,
+          ...(project === "rpkm" ? { attendedDays: registration.attendedDays } : {})
+        }
       : null,
     travelLegs: legs,
     group
