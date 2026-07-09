@@ -4,6 +4,7 @@ import {
   getRegistrationProfile,
   RegistrationServiceError,
   submitRegistration,
+  updateRegistrationProfile,
   type AuthUser,
   type MeResult,
   type RegisterDeps,
@@ -65,10 +66,35 @@ const getProfile = async (
   return { user, registration: null, travelLegs };
 };
 
+const updateProfile = async (
+  authUser: AuthUser,
+  input: Partial<RegistrationInput>,
+  deps: RegisterDeps = {}
+): Promise<FdProfileResult> => {
+  const { user, registration, travelLegs } = await updateRegistrationProfile(
+    authUser,
+    "firstdate",
+    input,
+    deps
+  );
+  if (registration) {
+    return {
+      user,
+      registration: {
+        pdpaConsent: registration.pdpaConsent,
+        pnoReferralSource: registration.pnoReferralSource
+      },
+      travelLegs
+    };
+  }
+  return { user, registration: null, travelLegs };
+};
+
 // Namespace object — routes call `FdRegistrationService.<fn>(...)`.
 export const FdRegistrationService = {
   FdRegistrationServiceError: RegistrationServiceError,
   registerFd,
   getMe,
-  getProfile
+  getProfile,
+  updateProfile
 };

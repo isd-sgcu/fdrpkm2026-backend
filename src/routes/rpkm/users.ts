@@ -104,19 +104,29 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
   // Detailed registration profile prefill
   .get(
     "/profile",
-    async ({ user, status }) => {
-      try {
-        return successResponse(await RpkmRegistrationService.getProfile(user));
-      } catch (err) {
-        console.error("[rpkm /profile] unexpected error:", err);
-        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
-      }
-    },
+    async ({ user }) => successResponse(await RpkmRegistrationService.getProfile(user)),
     {
       auth: true,
       response: {
         200: "RpkmUser.ProfileResponse",
         401: tErrorResponse("UNAUTHORIZED"),
+        500: tErrorResponse("INTERNAL_SERVER_ERROR")
+      }
+    }
+  )
+  .patch(
+    "/profile",
+    async ({ user, body }) =>
+      successResponse(await RpkmRegistrationService.updateProfile(user, body)),
+    {
+      auth: true,
+      body: "RpkmUser.UpdateProfileBody",
+      response: {
+        200: "RpkmUser.ProfileResponse",
+        400: tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
+        401: tErrorResponse("UNAUTHORIZED"),
+        404: tErrorResponse("NOT_FOUND", t.Object({ message: t.String() })),
+        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }

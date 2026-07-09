@@ -183,7 +183,7 @@ const toGroupView = (group: Group): GroupView => ({
 
 /** Collect the `students` profile columns the client actually sent, so a
  * partial payload doesn't clobber stored values on the upsert's conflict set. */
-const collectProfile = (input: RegistrationInput): Partial<NewStudent> => {
+const collectProfile = (input: Partial<RegistrationInput>): Partial<NewStudent> => {
   const profile: Partial<NewStudent> = {};
   if (input.firstName !== undefined) profile.firstName = input.firstName;
   if (input.lastName !== undefined) profile.lastName = input.lastName;
@@ -510,4 +510,93 @@ export const getRegistrationProfile = async (
     travelLegs: legs,
     group
   };
+};
+
+export const updateRegistrationProfile = async (
+  authUser: AuthUser,
+  project: Project,
+  input: Partial<RegistrationInput>,
+  deps: RegisterDeps = {}
+): Promise<ProfileResult> => {
+  const database = deps.db ?? defaultDb;
+  const derivedStudentId = deriveStudentId(authUser.email);
+
+  const [student] = await database
+    .select()
+    .from(students)
+    .where(eq(students.studentId, derivedStudentId))
+    .limit(1);
+
+  if (!student) {
+    throw new RegistrationServiceError("NOT_FOUND", "error_student_not_found");
+  }
+
+  const [registration] = await database
+    .select()
+    .from(registrations)
+    .where(and(eq(registrations.studentId, student.id), eq(registrations.project, project)))
+    .limit(1);
+
+  if (!registration) {
+    throw new RegistrationServiceError("NOT_FOUND", "error_registration_not_found");
+  }
+
+  const legInputs = input.travelLegs;
+  if (legInputs !== undefined) {
+    if (legInputs.length < MIN_TRAVEL_LEGS || legInputs.length > MAX_TRAVEL_LEGS) {
+      throw new RegistrationServiceError(
+        "BAD_REQUEST",
+        `travelLegs must have between ${MIN_TRAVEL_LEGS} and ${MAX_TRAVEL_LEGS} items`
+      );
+    }
+    for (const leg of legInputs) {
+      if (leg.vehicle === "other" && !leg.vehicleOther?.trim()) {
+        throw new RegistrationServiceError(
+          "BAD_REQUEST",
+          "vehicleOther is required when vehicle is 'other'"
+        );
+      }
+    }
+  }
+
+  const profile = collectProfile(input);
+
+  await database.transaction(async (tx) => {
+    if (Object.keys(profile).length > 0) {
+      await tx.update(students).set(profile).where(eq(students.id, student.id));
+    }
+
+    if (project === "rpkm" && input.attendedDays !== undefined) {
+      await tx
+        .update(registrations)
+        .set({ attendedDays: input.attendedDays ?? null })
+        .where(eq(registrations.id, registration.id));
+    }
+
+    if (legInputs !== undefined) {
+      await tx.delete(travelLegs).where(eq(travelLegs.registrationId, registration.id));
+
+      const rows: NewTravelLeg[] = legInputs.map((leg, index) => {
+        const forceDestination =
+          legInputs.length === FORCE_DESTINATION_AT_LENGTH && index === legInputs.length - 1;
+        return {
+          registrationId: registration.id,
+          seq: index + 1,
+          vehicle: leg.vehicle,
+          vehicleOther: leg.vehicle === "other" ? leg.vehicleOther!.trim() : null,
+          originDistrict: leg.originDistrict ?? "",
+          originProvince: leg.originProvince ?? "",
+          destinationDistrict: forceDestination
+            ? FIXED_LAST_DESTINATION.district
+            : (leg.destinationDistrict ?? ""),
+          destinationProvince: forceDestination
+            ? FIXED_LAST_DESTINATION.province
+            : (leg.destinationProvince ?? "")
+        };
+      });
+      await tx.insert(travelLegs).values(rows);
+    }
+  });
+
+  return getRegistrationProfile(authUser, project, deps);
 };

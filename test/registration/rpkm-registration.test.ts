@@ -398,3 +398,60 @@ describe("getMe (RPKM) - debloated", () => {
     ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
   });
 });
+
+describe("updateProfile (RPKM)", () => {
+  it("successfully updates student fields and replaces travel legs", async () => {
+    await registerRpkm(authUser(), validInput(), injected());
+
+    const updatePayload = validInput({
+      nickname: "NewRpkmNick",
+      faculty: "Science",
+      allergies: "peanuts",
+      dietary: "vegan",
+      medicalNotes: "asthma",
+      attendedDays: 3,
+      travelLegs: [
+        leg({ originDistrict: "Bang Kruai", originProvince: "Nonthaburi" }),
+        leg({ originDistrict: "Sathon", originProvince: "Bangkok" })
+      ]
+    });
+
+    const profile = await RpkmRegistrationService.updateProfile(
+      authUser(),
+      updatePayload,
+      injected()
+    );
+    expect(profile.user.nickname).toBe("NewRpkmNick");
+    expect(profile.user.faculty).toBe("Science");
+    expect(profile.user.allergies).toBe("peanuts");
+    expect(profile.user.dietary).toBe("vegan");
+    expect(profile.user.medicalNotes).toBe("asthma");
+    expect(profile.registration?.attendedDays).toBe(3);
+    expect(profile.travelLegs).toHaveLength(2);
+    expect(profile.travelLegs[0].originDistrict).toBe("Bang Kruai");
+    expect(profile.travelLegs[1].originDistrict).toBe("Sathon");
+  });
+
+  it("successfully performs partial update without changing travel legs", async () => {
+    await registerRpkm(authUser(), validInput(), injected());
+
+    const partialPayload = {
+      nickname: "PartialNick"
+    };
+
+    const profile = await RpkmRegistrationService.updateProfile(
+      authUser(),
+      partialPayload,
+      injected()
+    );
+    expect(profile.user.nickname).toBe("PartialNick");
+    expect(profile.user.csoDistrict).toBe("Suthep"); // Unchanged
+    expect(profile.travelLegs).toHaveLength(1); // Unchanged
+  });
+
+  it("throws NOT_FOUND if the user is unregistered", async () => {
+    await expect(
+      RpkmRegistrationService.updateProfile(authUser(), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});

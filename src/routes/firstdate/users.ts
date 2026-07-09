@@ -101,19 +101,29 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   // Detailed registration profile prefill
   .get(
     "/profile",
-    async ({ user, status }) => {
-      try {
-        return successResponse(await FdRegistrationService.getProfile(user));
-      } catch (err) {
-        console.error("[fd /profile] unexpected error:", err);
-        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
-      }
-    },
+    async ({ user }) => successResponse(await FdRegistrationService.getProfile(user)),
     {
       auth: true,
       response: {
         200: "FdUser.ProfileResponse",
         401: tErrorResponse("UNAUTHORIZED"),
+        500: tErrorResponse("INTERNAL_SERVER_ERROR")
+      }
+    }
+  )
+  .patch(
+    "/profile",
+    async ({ user, body }) =>
+      successResponse(await FdRegistrationService.updateProfile(user, body)),
+    {
+      auth: true,
+      body: "FdUser.UpdateProfileBody",
+      response: {
+        200: "FdUser.ProfileResponse",
+        400: tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
+        401: tErrorResponse("UNAUTHORIZED"),
+        404: tErrorResponse("NOT_FOUND", t.Object({ message: t.String() })),
+        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }

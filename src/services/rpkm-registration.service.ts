@@ -4,6 +4,7 @@ import {
   getRegistrationProfile,
   RegistrationServiceError,
   submitRegistration,
+  updateRegistrationProfile,
   type AuthUser,
   type GroupView,
   type MeResult,
@@ -63,11 +64,38 @@ const getProfile = async (
   return { user, registration: null, travelLegs, group };
 };
 
+const updateProfile = async (
+  authUser: AuthUser,
+  input: Partial<RegistrationInput>,
+  deps: RegisterDeps = {}
+): Promise<RpkmProfileResult> => {
+  const { user, registration, travelLegs, group } = await updateRegistrationProfile(
+    authUser,
+    "rpkm",
+    input,
+    deps
+  );
+  if (registration) {
+    return {
+      user,
+      registration: {
+        pdpaConsent: registration.pdpaConsent,
+        pnoReferralSource: registration.pnoReferralSource,
+        attendedDays: registration.attendedDays ?? null
+      },
+      travelLegs,
+      group
+    };
+  }
+  return { user, registration: null, travelLegs, group };
+};
+
 // Namespace object — routes call `RpkmRegistrationService.<fn>(...)`. The error
 // class is the shared one; the alias keeps the route's instanceof check stable.
 export const RpkmRegistrationService = {
   RpkmRegistrationServiceError: RegistrationServiceError,
   registerRpkm,
   getMe,
-  getProfile
+  getProfile,
+  updateProfile
 };

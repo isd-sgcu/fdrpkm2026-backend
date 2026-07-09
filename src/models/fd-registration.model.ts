@@ -38,6 +38,7 @@ const meResult = t.Object({
 
 export const FdRegistrationModel = new Elysia().model({
   registrationBody: f.registrationBody,
+  updateProfileBody: t.Partial(f.registrationBody),
   registrationResponse: tSuccessResponse(registrationResult),
   meResponse: tSuccessResponse(meResult),
   profileResponse: tSuccessResponse(profileResult)

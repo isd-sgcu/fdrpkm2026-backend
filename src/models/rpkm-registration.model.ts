@@ -61,6 +61,7 @@ const meResult = t.Object({
 
 export const RpkmRegistrationModel = new Elysia().model({
   registrationBody: rpkmRegistrationBody,
+  updateProfileBody: t.Partial(rpkmRegistrationBody),
   registrationResponse: tSuccessResponse(registrationResult),
   meResponse: tSuccessResponse(meResult),
   profileResponse: tSuccessResponse(profileResult)

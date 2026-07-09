@@ -297,3 +297,58 @@ describe("FirstDate + RPKM share one student, separate registrations", () => {
     expect(await db.select().from(schema.groups)).toHaveLength(1); // only the RPKM one
   });
 });
+
+describe("updateProfile (FirstDate)", () => {
+  it("successfully updates student fields and replaces travel legs", async () => {
+    await registerFd(authUser(), validInput(), injected());
+
+    const updatePayload = validInput({
+      nickname: "NewNick",
+      faculty: "Engineering",
+      allergies: "peanuts",
+      dietary: "vegan",
+      medicalNotes: "asthma",
+      travelLegs: [
+        leg({ originDistrict: "Bang Kruai", originProvince: "Nonthaburi" }),
+        leg({ originDistrict: "Sathon", originProvince: "Bangkok" })
+      ]
+    });
+
+    const profile = await FdRegistrationService.updateProfile(
+      authUser(),
+      updatePayload,
+      injected()
+    );
+    expect(profile.user.nickname).toBe("NewNick");
+    expect(profile.user.faculty).toBe("Engineering");
+    expect(profile.user.allergies).toBe("peanuts");
+    expect(profile.user.dietary).toBe("vegan");
+    expect(profile.user.medicalNotes).toBe("asthma");
+    expect(profile.travelLegs).toHaveLength(2);
+    expect(profile.travelLegs[0].originDistrict).toBe("Bang Kruai");
+    expect(profile.travelLegs[1].originDistrict).toBe("Sathon");
+  });
+
+  it("successfully performs partial update without changing travel legs", async () => {
+    await registerFd(authUser(), validInput(), injected());
+
+    const partialPayload = {
+      nickname: "PartialNick"
+    };
+
+    const profile = await FdRegistrationService.updateProfile(
+      authUser(),
+      partialPayload,
+      injected()
+    );
+    expect(profile.user.nickname).toBe("PartialNick");
+    expect(profile.user.csoDistrict).toBe("Suthep"); // Unchanged
+    expect(profile.travelLegs).toHaveLength(1); // Unchanged
+  });
+
+  it("throws NOT_FOUND if the user is unregistered", async () => {
+    await expect(
+      FdRegistrationService.updateProfile(authUser(), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
