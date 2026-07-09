@@ -40,7 +40,19 @@ export const AppErrorCode = {
   /** 409: user already exists, cannot register again. */
   USER_ALREADY_EXISTS: "USER_ALREADY_EXISTS",
   /** 422: request body failed schema validation. */
-  VALIDATION: "VALIDATION"
+  VALIDATION: "VALIDATION",
+
+  // rpkm - games
+  /** 400: `:gameType` is not a valid rpkm checkpoint game (jigsaw/csr). */
+  INVALID_GAME_TYPE: "INVALID_GAME_TYPE",
+  /** 403: rpkm checkpoint game (jigsaw/csr) is outside its play window. */
+  GAME_CLOSED: "GAME_CLOSED",
+  /** 403: scan location is outside the checkpoint's geofence radius. */
+  OUT_OF_GEOFENCE: "OUT_OF_GEOFENCE",
+  /** 404: checkpoint code does not exist for the given rpkm game. */
+  INVALID_CHECKPOINT: "INVALID_CHECKPOINT",
+  /** 409: checkpoint already scanned by this student (rpkm games). */
+  ALREADY_COLLECTED: "ALREADY_COLLECTED"
 } as const;
 
 /** Union of AppErrorCode key names, e.g. "NOT_FOUND". */
