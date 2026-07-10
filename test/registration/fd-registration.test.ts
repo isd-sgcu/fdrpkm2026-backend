@@ -6,10 +6,10 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 
 import type { Database } from "../../src/db";
 import * as schema from "../../src/db/schema";
-import { FdRegistrationService } from "../../src/services/fd-registration.service";
-import { RpkmRegistrationService } from "../../src/services/rpkm-registration.service";
+import { FirstDateService } from "../../src/services/firstdate.service";
+import { RpkmService } from "../../src/services/rpkm.service";
 
-const { registerFd, getMe, getProfile } = FdRegistrationService;
+const { registerFd, getMe, getProfile } = FirstDateService;
 
 let client: PGlite;
 let db: PgliteDatabase<typeof schema>;
@@ -269,7 +269,7 @@ describe("getMe (FirstDate) - debloated", () => {
 describe("FirstDate + RPKM share one student, separate registrations", () => {
   it("lets the same person register for both projects independently", async () => {
     const fd = await registerFd(authUser(), validInput(), injected());
-    const rpkm = await RpkmRegistrationService.registerRpkm(authUser(), validInput(), injected());
+    const rpkm = await RpkmService.registerRpkm(authUser(), validInput(), injected());
 
     expect(await db.select().from(schema.students)).toHaveLength(1); // one shared student
     expect(rpkm.userId).toBe(fd.userId);
@@ -314,11 +314,7 @@ describe("updateProfile (FirstDate)", () => {
       ]
     });
 
-    const profile = await FdRegistrationService.updateProfile(
-      authUser(),
-      updatePayload,
-      injected()
-    );
+    const profile = await FirstDateService.updateProfile(authUser(), updatePayload, injected());
     expect(profile.user.nickname).toBe("NewNick");
     expect(profile.user.faculty).toBe("Engineering");
     expect(profile.user.allergies).toBe("peanuts");
@@ -336,11 +332,7 @@ describe("updateProfile (FirstDate)", () => {
       nickname: "PartialNick"
     };
 
-    const profile = await FdRegistrationService.updateProfile(
-      authUser(),
-      partialPayload,
-      injected()
-    );
+    const profile = await FirstDateService.updateProfile(authUser(), partialPayload, injected());
     expect(profile.user.nickname).toBe("PartialNick");
     expect(profile.user.csoDistrict).toBe("Suthep"); // Unchanged
     expect(profile.travelLegs).toHaveLength(1); // Unchanged
@@ -348,7 +340,7 @@ describe("updateProfile (FirstDate)", () => {
 
   it("throws NOT_FOUND if the user is unregistered", async () => {
     await expect(
-      FdRegistrationService.updateProfile(authUser(), validInput(), injected())
+      FirstDateService.updateProfile(authUser(), validInput(), injected())
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

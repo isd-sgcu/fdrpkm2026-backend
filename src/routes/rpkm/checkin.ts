@@ -1,6 +1,6 @@
 import { Elysia } from "elysia";
 import { authMiddleware } from "@src/routes/auth";
-import { RpkmCheckinService } from "@src/services/rpkm-checkin.service";
+import { RpkmService } from "@src/services/rpkm.service";
 import { errorResponse, tErrorResponse, tSuccessResponse } from "@src/utils";
 import { CheckinError } from "@src/services/checkin.helper";
 import { CheckinModel } from "@src/models/checkin.model";
@@ -14,7 +14,7 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
     async ({ user, body, status }) => {
       try {
         const staffCunetId = user.email?.split("@")[0] ?? "";
-        const entry = await RpkmCheckinService.checkinRegistration(staffCunetId, body.student_id);
+        const entry = await RpkmService.checkinRegistration(staffCunetId, body.student_id);
         return { success: true as const, data: entry };
       } catch (err) {
         if (err instanceof CheckinError) {
@@ -52,7 +52,7 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
     async ({ user, body, status }) => {
       try {
         const staffCunetId = user.email?.split("@")[0] ?? "";
-        const entry = await RpkmCheckinService.checkinFreshmenNight(staffCunetId, body.student_id);
+        const entry = await RpkmService.checkinFreshmenNight(staffCunetId, body.student_id);
         return { success: true as const, data: entry };
       } catch (err) {
         if (err instanceof CheckinError) {

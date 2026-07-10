@@ -3,13 +3,13 @@ import { Elysia, t } from "elysia";
 import { errorResponse, successResponse, tErrorResponse, tSuccessResponse } from "@src/utils";
 import { authMiddleware } from "@src/routes/auth";
 import { RpkmRegistrationModel } from "@src/models/rpkm-registration.model";
-import { RpkmRegistrationService } from "@src/services/rpkm-registration.service";
+import { RpkmService } from "@src/services/rpkm.service";
 
 /**
  * RPKM user routes — the registration flow (project=rpkm). Thin controllers:
  * auth guard (via the `auth: true` macro) → validate (via the model schemas)
  * → call the service → map result/error to HTTP. All storage + business
- * rules live in RpkmRegistrationService (see docs/mvc.md).
+ * rules live in RpkmService (see docs/mvc.md).
  *
  * Kept as its own Elysia instance (not folded into rpkmRoutes) so its model
  * namespace ("RpkmUser.") stays independent of the houses model's ("Rpkm.")
@@ -23,10 +23,10 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
     "/registration",
     async ({ user, body, status }) => {
       try {
-        const data = await RpkmRegistrationService.registerRpkm(user, body);
+        const data = await RpkmService.registerRpkm(user, body);
         return successResponse(data);
       } catch (err) {
-        if (err instanceof RpkmRegistrationService.RpkmRegistrationServiceError) {
+        if (err instanceof RpkmService.RpkmServiceError) {
           switch (err.code) {
             case "PDPA_REQUIRED":
               return status(400, errorResponse("PDPA_REQUIRED", { message: err.message }));
@@ -67,9 +67,9 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
     "/me",
     async ({ user, status }) => {
       try {
-        return successResponse(await RpkmRegistrationService.getMe(user));
+        return successResponse(await RpkmService.getMe(user));
       } catch (err) {
-        if (err instanceof RpkmRegistrationService.RpkmRegistrationServiceError) {
+        if (err instanceof RpkmService.RpkmServiceError) {
           if (err.code === "NOT_FRESHMEN") {
             return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
           }
@@ -89,22 +89,17 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
     }
   )
   // Detailed registration profile prefill
-  .get(
-    "/profile",
-    async ({ user }) => successResponse(await RpkmRegistrationService.getProfile(user)),
-    {
-      auth: true,
-      response: {
-        200: tSuccessResponse(RpkmRegistrationModel.models.profileResult.Schema()),
-        401: tErrorResponse("UNAUTHORIZED"),
-        500: tErrorResponse("INTERNAL_SERVER_ERROR")
-      }
+  .get("/profile", async ({ user }) => successResponse(await RpkmService.getProfile(user)), {
+    auth: true,
+    response: {
+      200: tSuccessResponse(RpkmRegistrationModel.models.profileResult.Schema()),
+      401: tErrorResponse("UNAUTHORIZED"),
+      500: tErrorResponse("INTERNAL_SERVER_ERROR")
     }
-  )
+  })
   .patch(
     "/profile",
-    async ({ user, body }) =>
-      successResponse(await RpkmRegistrationService.updateProfile(user, body)),
+    async ({ user, body }) => successResponse(await RpkmService.updateProfile(user, body)),
     {
       auth: true,
       body: "RpkmUser.UpdateProfileBody",
