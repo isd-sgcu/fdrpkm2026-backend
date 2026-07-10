@@ -41,7 +41,7 @@ export const gameRoute = new Elysia({ prefix: "/game" })
     },
     {
       auth: true,
-      params: GamesModel.models.gameTypeParams.Schema(),
+      params: "Games.GameTypeParams",
       response: {
         200: tSuccessResponse(GamesModel.models.progressResponse.Schema()),
         400: tErrorResponse("INVALID_GAME_TYPE"),
@@ -82,8 +82,8 @@ export const gameRoute = new Elysia({ prefix: "/game" })
     },
     {
       auth: true,
-      params: GamesModel.models.gameTypeParams.Schema(),
-      body: GamesModel.models.collectCheckpointBody.Schema(),
+      params: "Games.GameTypeParams",
+      body: "Games.CollectCheckpointBody",
       response: {
         200: tSuccessResponse(GamesModel.models.collectCheckpointResponse.Schema()),
         400: tErrorResponse("INVALID_GAME_TYPE"),
@@ -94,8 +94,7 @@ export const gameRoute = new Elysia({ prefix: "/game" })
           tErrorResponse("GAME_CLOSED")
         ]),
         404: t.Union([tErrorResponse("INVALID_CHECKPOINT"), tErrorResponse("NOT_FOUND")]),
-        409: tErrorResponse("ALREADY_COLLECTED"),
-        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() }))
+        409: tErrorResponse("ALREADY_COLLECTED")
       }
     }
   );

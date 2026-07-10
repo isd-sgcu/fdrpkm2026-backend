@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 
-import { errorResponse, successResponse, tErrorResponse } from "@src/utils";
+import { errorResponse, successResponse, tErrorResponse, tSuccessResponse } from "@src/utils";
 import { authMiddleware } from "@src/routes/auth";
 import { FdRegistrationModel } from "@src/models/fd-registration.model";
 import { FdRegistrationService } from "@src/services/fd-registration.service";
@@ -17,18 +17,6 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   .use(authMiddleware)
   .use(FdRegistrationModel)
   .prefix("model", "FdUser.")
-  // Standardize errors into our envelope. Request-body validation -> 422
-  // error_validation; a *response*-schema mismatch is a server bug, so it falls
-  // through to the 500 envelope below.
-  .onError(({ code, error, status }) => {
-    if (code === "VALIDATION") {
-      if ((error as { type?: string }).type === "response") {
-        console.error("[fd registration] response schema mismatch:", error);
-        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
-      }
-      return status(422, errorResponse("VALIDATION", { message: "error_validation" }));
-    }
-  })
   .post(
     "/registration",
     async ({ user, body, status }) => {
@@ -59,7 +47,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       auth: true,
       body: "FdUser.RegistrationBody",
       response: {
-        200: "FdUser.RegistrationResponse",
+        200: tSuccessResponse(FdRegistrationModel.models.registrationResult.Schema()),
         400: t.Union([
           tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
           tErrorResponse("PDPA_REQUIRED", t.Object({ message: t.String() }))
@@ -67,7 +55,6 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         409: tErrorResponse("ALREADY_REGISTERED", t.Object({ message: t.String() })),
-        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }
@@ -91,7 +78,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
     {
       auth: true,
       response: {
-        200: "FdUser.MeResponse",
+        200: tSuccessResponse(FdRegistrationModel.models.meResult.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
@@ -105,7 +92,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
     {
       auth: true,
       response: {
-        200: "FdUser.ProfileResponse",
+        200: tSuccessResponse(FdRegistrationModel.models.profileResult.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
@@ -119,11 +106,10 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       auth: true,
       body: "FdUser.UpdateProfileBody",
       response: {
-        200: "FdUser.ProfileResponse",
+        200: tSuccessResponse(FdRegistrationModel.models.profileResult.Schema()),
         400: tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
         401: tErrorResponse("UNAUTHORIZED"),
         404: tErrorResponse("NOT_FOUND", t.Object({ message: t.String() })),
-        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }

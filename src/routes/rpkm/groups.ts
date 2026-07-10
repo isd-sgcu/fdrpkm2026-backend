@@ -36,7 +36,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     },
     {
       auth: true,
-      body: GroupsModel.models.joinBody.Schema(),
+      body: "Groups.JoinBody",
       response: {
         200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
         401: tErrorResponse("UNAUTHORIZED"),
@@ -143,7 +143,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     },
     {
       auth: true,
-      body: GroupsModel.models.housePreferencesBody.Schema(),
+      body: "Groups.HousePreferencesBody",
       response: {
         200: tSuccessResponse(GroupsModel.models.housePreferencesResponse.Schema()),
         400: tErrorResponse("BAD_REQUEST"),
@@ -204,7 +204,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     },
     {
       auth: true,
-      params: GroupsModel.models.memberParams.Schema(),
+      params: "Groups.MemberParams",
       response: {
         200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
         400: tErrorResponse("BAD_REQUEST"),

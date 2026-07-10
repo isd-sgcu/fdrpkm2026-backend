@@ -21,7 +21,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
   // validation, and OpenAPI, instead of a hand-duplicated t.Object.
   .get("/", () => HousesService.listHouses(), {
     auth: true,
-    response: { 200: t.Array(HousesModel.models.house.Schema()) }
+    response: { 200: t.Array(t.Ref("Houses.House")) }
   })
   .get(
     "/stats",
@@ -32,7 +32,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     {
       auth: true,
       response: {
-        200: t.Array(HousesModel.models.houseStat.Schema()),
+        200: t.Array(t.Ref("Houses.HouseStat")),
         401: tErrorResponse("UNAUTHORIZED"),
         403: tErrorResponse("NOT_FRESHMEN")
       }
@@ -51,9 +51,9 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     },
     {
       auth: true,
-      params: HousesModel.models.houseId.Schema(),
+      params: "Houses.HouseId",
       response: {
-        200: HousesModel.models.house.Schema(),
+        200: "Houses.House",
         404: tErrorResponse("NOT_FOUND")
       }
     }
