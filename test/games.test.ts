@@ -113,14 +113,12 @@ describe("GamesService.getProgress", () => {
     const student = await createStudent("6900000001", "s1@student.chula.ac.th");
     await createStudent("6900000002", "s2@student.chula.ac.th");
     const jig = await createCheckpoint("jigsaw", "JIG-01", CHECKPOINT_LAT, CHECKPOINT_LNG);
-    await db
-      .insert(schema.scans)
-      .values({
-        checkpointId: jig.id,
-        studentId: student.id,
-        lat: CHECKPOINT_LAT,
-        lng: CHECKPOINT_LNG
-      });
+    await db.insert(schema.scans).values({
+      checkpointId: jig.id,
+      studentId: student.id,
+      lat: CHECKPOINT_LAT,
+      lng: CHECKPOINT_LNG
+    });
 
     const result = await GamesService.getProgress("6900000002", "jigsaw", injected());
     expect(result.collected).toHaveLength(0);
