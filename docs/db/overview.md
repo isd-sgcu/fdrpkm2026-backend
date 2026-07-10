@@ -24,18 +24,22 @@ The two websites stay completely independent in look and code. The **only** thin
 Think of each table as a spreadsheet/list. Here are all 9:
 
 ### People & signups
+
 - **students** — one row per person. Name, faculty, contact, allergies, etc. Their student ID doubles as their QR code. We can tell who's a first-year because their student ID starts with `69`.
 - **registrations** — one row per (person + project). Holds their PDPA consent and, for RPKM, how many days they attended. A person can have up to two: one for FirstDate, one for RPKM.
 - **travel_legs** — the carbon-footprint travel answers. A trip can have up to 2 legs (e.g. walk → BTS), so each leg is its own row: vehicle type, origin district, destination. We only store the answers — we do **not** calculate carbon ourselves (whoever owns that data does the math later).
 
 ### Event entry scans
+
 - **entries** — when a staff scans a น้อง's QR at an event entrance, we record it here. Each event is scanned separately (`event` = `firstdate` | `freshmennight` | `rpkm`), so up to three rows per น้อง — one per event. If scanning fails, staff can type the student ID instead — same result.
 
 ### RPKM stamp games (Jigsaw + CSR)
+
 - **checkpoints** — the QR-code points. 10 points around campus (Jigsaw) + ~35 shops (CSR). Each has its location.
 - **scans** — every time a น้อง scans a checkpoint, we log who, which point, and exactly when. A น้อง can only get credit once per point. Game stats (who collected how many) come straight from this.
 
 ### RPKM houses (บ้าน)
+
 - **houses** — the 22 houses.
 - **groups** — a group of friends (up to 4). Has a leader and a 6-digit join code. After the random draw, the assigned house gets written here too.
 - **group_house_choices** — each group's ranked house picks (1st choice … up to 5th). One row per pick.
@@ -44,15 +48,17 @@ Think of each table as a spreadsheet/list. Here are all 9:
 
 ## How the key features work
 
-**Logging in & registering.** น้อง opens either site → logs in with Chula SSO → if they haven't registered on *that* site yet, they see the registration form (pre-filled if they did the other site already). Done once per site.
+**Logging in & registering.** น้อง opens either site → logs in with Chula SSO → if they haven't registered on _that_ site yet, they see the registration form (pre-filled if they did the other site already). Done once per site.
 
 **The QR / scanning.** Every น้อง's QR is just their student ID.
-- *FirstDate:* staff scan น้อง to mark attendance.
-- *Games:* น้อง scan the static QR posted at each point. The server checks: is the game open right now? are they a first-year? are they actually near the point (GPS)? Already scanned this point? If all good → recorded.
+
+- _FirstDate:_ staff scan น้อง to mark attendance.
+- _Games:_ น้อง scan the static QR posted at each point. The server checks: is the game open right now? are they a first-year? are they actually near the point (GPS)? Already scanned this point? If all good → recorded.
 
 **GPS check.** Each game point has a real location. When a น้อง scans, their phone sends its location and we check they're close enough. This is **on by default** but can be switched off instantly (in a config setting) if it causes trouble on game day — for example if GPS is flaky indoors.
 
 **Houses & the group system.** This is the most interesting part:
+
 - Everyone is **always in exactly one group.** When you register for RPKM, you automatically get your own group (just you, you're the leader).
 - To team up: the leader shares their **join code**, friends enter it to join. Max 4 per group.
 - The leader can kick members and re-generate the code (kills the old one if it leaked). Any member can leave — when they do, they get their own fresh solo group again.
@@ -74,6 +80,7 @@ Think of each table as a spreadsheet/list. Here are all 9:
 ---
 
 ## Not in scope (so nobody expects it)
+
 - **Freshmen Night** — handled by CUDSON, not us.
 - **Personality test** — not happening this year.
 - **Day-18 stamp collection** — paper-based, not our system.
@@ -83,14 +90,15 @@ Think of each table as a spreadsheet/list. Here are all 9:
 ---
 
 ## Timeline the data supports
-| Date | What happens |
-|---|---|
-| 12 Jul | House info finalized (we seed the 22 houses) |
-| 17 Jul (before 7pm) | FirstDate site live: login, registration, QR |
-| 18 Jul | FirstDate event — staff scanning; RPKM house registration + groups open (00:00) |
-| 20 Jul | Stamp games (Jigsaw + CSR) open |
-| 22 Jul | House group selection closes |
-| 23–25 Jul | Random house draw |
-| 26 Jul | Houses announced (before 7pm) |
-| 3 Aug / 7 Aug | Jigsaw / CSR games close |
-| 5–6 Aug | Game stats exported |
+
+| Date                | What happens                                                                    |
+| ------------------- | ------------------------------------------------------------------------------- |
+| 12 Jul              | House info finalized (we seed the 22 houses)                                    |
+| 17 Jul (before 7pm) | FirstDate site live: login, registration, QR                                    |
+| 18 Jul              | FirstDate event — staff scanning; RPKM house registration + groups open (00:00) |
+| 20 Jul              | Stamp games (Jigsaw + CSR) open                                                 |
+| 22 Jul              | House group selection closes                                                    |
+| 23–25 Jul           | Random house draw                                                               |
+| 26 Jul              | Houses announced (before 7pm)                                                   |
+| 3 Aug / 7 Aug       | Jigsaw / CSR games close                                                        |
+| 5–6 Aug             | Game stats exported                                                             |

@@ -27,6 +27,9 @@ Table students {
   medical_notes text
   role varchar [note: 'student or staff']
   pno_sgcu_awareness varchar [null, note: 'survey (P&O): SGCU familiarity; free-text code']
+  cso_district varchar [null, note: 'CSO: home sub-district']
+  cso_province varchar [null, note: 'CSO: home province']
+  bottle boolean [null, note: 'Did student bring water bottle']
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 }
@@ -39,6 +42,7 @@ Table registrations {
   attended_days int [null, note: 'RPKM carbon days attended']
   group_id uuid [ref: > groups.id, null, note: 'RPKM only. SET NULL on group delete']
   pno_referral_source varchar [null, note: 'survey (P&O): publicity channel; free-text code']
+  staff_role varchar [null, note: 'staff role inside registration: firstdate, rpkm, walkrally, freshmennight']
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 

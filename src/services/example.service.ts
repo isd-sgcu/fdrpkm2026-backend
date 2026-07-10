@@ -44,7 +44,7 @@ const deleteExampleUser = (id: string): void => {
 
 // Namespace object — routes call `ExampleService.getExampleUser(...)` instead
 // of importing individual functions, so every feature's service is reached
-// through one consistent name (mirrors ExampleModel/FirstDateService/RpkmService).
+// through one consistent name (mirrors ExampleModel/FirstDateService/HousesService).
 export const ExampleService = {
   ExampleServiceError,
   getExampleUser,

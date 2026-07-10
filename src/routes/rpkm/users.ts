@@ -19,6 +19,18 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
   .use(authMiddleware)
   .use(RpkmRegistrationModel)
   .prefix("model", "RpkmUser.")
+  // Standardize errors into our envelope. Request-body validation -> 422
+  // error_validation; a *response*-schema mismatch is a server bug, not the
+  // client's fault, so it falls through to the 500 envelope below.
+  .onError(({ code, error, status }) => {
+    if (code === "VALIDATION") {
+      if ((error as { type?: string }).type === "response") {
+        console.error("[rpkm registration] response schema mismatch:", error);
+        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
+      }
+      return status(422, errorResponse("VALIDATION", { message: "error_validation" }));
+    }
+  })
   .post(
     "/registration",
     async ({ user, body, status }) => {
@@ -32,13 +44,18 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
               return status(400, errorResponse("PDPA_REQUIRED", { message: err.message }));
             case "BAD_REQUEST":
               return status(400, errorResponse("BAD_REQUEST", { message: err.message }));
+            case "NOT_FRESHMEN":
+              return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
             case "ALREADY_REGISTERED":
               return status(409, errorResponse("ALREADY_REGISTERED", { message: err.message }));
             default:
               return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
           }
         }
-        throw err;
+        // Unexpected (non-domain) error — keep the standard envelope, don't
+        // leak Elysia's default error body.
+        console.error("[rpkm registration] unexpected error:", err);
+        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
       }
     },
     {
@@ -51,15 +68,66 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
           tErrorResponse("PDPA_REQUIRED", t.Object({ message: t.String() }))
         ]),
         401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
         409: tErrorResponse("ALREADY_REGISTERED", t.Object({ message: t.String() })),
+        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
         500: tErrorResponse("INTERNAL_SERVER_ERROR")
       }
     }
   )
-  .get("/me", async ({ user }) => successResponse(await RpkmRegistrationService.getMe(user)), {
-    auth: true,
-    response: {
-      200: "RpkmUser.MeResponse",
-      401: tErrorResponse("UNAUTHORIZED")
+  // Any authenticated user may read their own debloated info (no freshman/staff gate).
+  .get(
+    "/me",
+    async ({ user, status }) => {
+      try {
+        return successResponse(await RpkmRegistrationService.getMe(user));
+      } catch (err) {
+        if (err instanceof RpkmRegistrationService.RpkmRegistrationServiceError) {
+          if (err.code === "NOT_FRESHMEN") {
+            return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
+          }
+        }
+        console.error("[rpkm /me] unexpected error:", err);
+        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
+      }
+    },
+    {
+      auth: true,
+      response: {
+        200: "RpkmUser.MeResponse",
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
+        500: tErrorResponse("INTERNAL_SERVER_ERROR")
+      }
     }
-  });
+  )
+  // Detailed registration profile prefill
+  .get(
+    "/profile",
+    async ({ user }) => successResponse(await RpkmRegistrationService.getProfile(user)),
+    {
+      auth: true,
+      response: {
+        200: "RpkmUser.ProfileResponse",
+        401: tErrorResponse("UNAUTHORIZED"),
+        500: tErrorResponse("INTERNAL_SERVER_ERROR")
+      }
+    }
+  )
+  .patch(
+    "/profile",
+    async ({ user, body }) =>
+      successResponse(await RpkmRegistrationService.updateProfile(user, body)),
+    {
+      auth: true,
+      body: "RpkmUser.UpdateProfileBody",
+      response: {
+        200: "RpkmUser.ProfileResponse",
+        400: tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
+        401: tErrorResponse("UNAUTHORIZED"),
+        404: tErrorResponse("NOT_FOUND", t.Object({ message: t.String() })),
+        422: tErrorResponse("VALIDATION", t.Object({ message: t.String() })),
+        500: tErrorResponse("INTERNAL_SERVER_ERROR")
+      }
+    }
+  );

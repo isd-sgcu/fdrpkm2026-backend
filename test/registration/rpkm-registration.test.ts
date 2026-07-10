@@ -4,11 +4,12 @@ import { eq } from "drizzle-orm";
 import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 
-import type { Database } from "../src/db";
-import * as schema from "../src/db/schema";
-import { RpkmRegistrationService } from "../src/services/rpkm-registration.service";
+import type { Database } from "../../src/db";
+import * as schema from "../../src/db/schema";
+import { generateJoinCode } from "../../src/utils";
+import { RpkmRegistrationService } from "../../src/services/rpkm-registration.service";
 
-const { registerRpkm, getMe, generateJoinCode } = RpkmRegistrationService;
+const { registerRpkm, getMe, getProfile } = RpkmRegistrationService;
 
 // Real Postgres (pglite, in-memory WASM) with the generated migrations applied,
 // so these exercise the actual constraints + transactions. The service takes an
@@ -49,6 +50,9 @@ const leg = (over: Record<string, unknown> = {}) => ({
 // A valid minimal registration — travelLegs are required now (1..4).
 const validInput = (over: Record<string, unknown> = {}) => ({
   pdpaConsent: true,
+  csoDistrict: "Suthep",
+  csoProvince: "Chiang Mai",
+  attendedDays: 3,
   travelLegs: [leg()],
   ...over
 });
@@ -265,7 +269,7 @@ describe("registerRpkm — join code", () => {
     expect(result.group.joinCode).toBe("BBBBBB");
   });
 
-  it("rolls the whole transaction back when a unique code can't be found", async () => {
+  it("rolls the whole transaction back when all 10 attempts hit a collision", async () => {
     const [leader] = await db
       .insert(schema.students)
       .values({
@@ -277,6 +281,7 @@ describe("registerRpkm — join code", () => {
       .returning();
     await db.insert(schema.groups).values({ leaderId: leader.id, joinCode: "AAAAAA" });
 
+    // Always return the same colliding code — exhausts all 10 attempts.
     const genCode = () => "AAAAAA";
 
     await expect(
@@ -284,12 +289,41 @@ describe("registerRpkm — join code", () => {
     ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
 
     const students = await db.select().from(schema.students);
-    expect(students).toHaveLength(1); // only the seeded leader
+    expect(students).toHaveLength(1); // only the seeded leader — tx rolled back
     expect(await db.select().from(schema.registrations)).toHaveLength(0);
   });
 });
 
-describe("getMe", () => {
+describe("registerRpkm — access control", () => {
+  it("rejects non-freshmen registration", async () => {
+    await expect(
+      registerRpkm(authUser({ email: "6612345678@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+    expect(await db.select().from(schema.registrations)).toHaveLength(0);
+  });
+
+  it("prevent pre-seeded staff from registering", async () => {
+    // Seed a staff user
+    await db.insert(schema.students).values({
+      studentId: "staffuser",
+      email: "staffuser@student.chula.ac.th",
+      firstName: "Staff",
+      lastName: "Member",
+      role: "staff"
+    });
+
+    await expect(
+      registerRpkm(authUser({ email: "staffuser@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+  });
+
+  it("allows non-freshman to call getProfile", async () => {
+    const me = await getProfile(authUser({ email: "6612345678@student.chula.ac.th" }), injected());
+    expect(me.user.id).toBeNull();
+  });
+});
+
+describe("getProfile", () => {
   it("returns the saved data with pnoSgcuAwareness + profile on the user object", async () => {
     await registerRpkm(
       authUser(),
@@ -302,25 +336,122 @@ describe("getMe", () => {
       injected()
     );
 
-    const me = await getMe(authUser(), injected());
-    expect(me.user.studentCode).toBe("6912345678");
+    const me = await getProfile(authUser(), injected());
+    expect(me.user.studentId).toBe("6912345678");
     expect(me.user.firstName).toBe("ก้อง");
     expect(me.user.nickname).toBe("Kong");
     expect(me.user.pnoSgcuAwareness).toBe("instagram"); // on user, not registration
+    expect(me.user.csoDistrict).toBe("Suthep");
+    expect(me.user.csoProvince).toBe("Chiang Mai");
+    expect(me.user.bottle).toBeNull();
     expect(me.registration?.pdpaConsent).toBe(true);
     expect(me.registration?.pnoReferralSource).toBe("friend");
+    expect(me.registration?.attendedDays).toBe(3);
     expect(me.travelLegs).toHaveLength(1);
     expect(me.group?.leaderId).toBe(me.user.id!);
   });
 
   it("returns a stable empty shape (id/profile null) for a never-registered user", async () => {
-    const me = await getMe(authUser(), injected());
+    const me = await getProfile(authUser(), injected());
     expect(me.user.id).toBeNull();
-    expect(me.user.studentCode).toBe("6912345678");
+    expect(me.user.studentId).toBe("6912345678");
     expect(me.user.pnoSgcuAwareness).toBeNull();
+    expect(me.user.csoDistrict).toBeNull();
+    expect(me.user.csoProvince).toBeNull();
+    expect(me.user.bottle).toBeNull();
     expect(me.user.nickname).toBeNull();
     expect(me.registration).toBeNull();
     expect(me.travelLegs).toEqual([]);
     expect(me.group).toBeNull();
+  });
+});
+
+describe("getMe (RPKM) - debloated", () => {
+  it("returns debloated user info if registered", async () => {
+    const regResult = await registerRpkm(authUser(), validInput(), injected());
+    const me = await getMe(authUser(), injected());
+    expect(me).toEqual({
+      id: regResult.userId,
+      studentId: "6912345678",
+      firstName: "Somchai",
+      lastName: "Jaidee",
+      role: "student",
+      registered: true
+    });
+  });
+
+  it("returns debloated user info if not registered", async () => {
+    const me = await getMe(authUser(), injected());
+    expect(me).toEqual({
+      id: null,
+      studentId: "6912345678",
+      firstName: "Somchai",
+      lastName: "Jaidee",
+      role: "student",
+      registered: false
+    });
+  });
+
+  it("throws NOT_FRESHMEN for non-freshman when student record is absent", async () => {
+    await expect(
+      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+  });
+});
+
+describe("updateProfile (RPKM)", () => {
+  it("successfully updates student fields and replaces travel legs", async () => {
+    await registerRpkm(authUser(), validInput(), injected());
+
+    const updatePayload = validInput({
+      nickname: "NewRpkmNick",
+      faculty: "Science",
+      allergies: "peanuts",
+      dietary: "vegan",
+      medicalNotes: "asthma",
+      attendedDays: 3,
+      travelLegs: [
+        leg({ originDistrict: "Bang Kruai", originProvince: "Nonthaburi" }),
+        leg({ originDistrict: "Sathon", originProvince: "Bangkok" })
+      ]
+    });
+
+    const profile = await RpkmRegistrationService.updateProfile(
+      authUser(),
+      updatePayload,
+      injected()
+    );
+    expect(profile.user.nickname).toBe("NewRpkmNick");
+    expect(profile.user.faculty).toBe("Science");
+    expect(profile.user.allergies).toBe("peanuts");
+    expect(profile.user.dietary).toBe("vegan");
+    expect(profile.user.medicalNotes).toBe("asthma");
+    expect(profile.registration?.attendedDays).toBe(3);
+    expect(profile.travelLegs).toHaveLength(2);
+    expect(profile.travelLegs[0].originDistrict).toBe("Bang Kruai");
+    expect(profile.travelLegs[1].originDistrict).toBe("Sathon");
+  });
+
+  it("successfully performs partial update without changing travel legs", async () => {
+    await registerRpkm(authUser(), validInput(), injected());
+
+    const partialPayload = {
+      nickname: "PartialNick"
+    };
+
+    const profile = await RpkmRegistrationService.updateProfile(
+      authUser(),
+      partialPayload,
+      injected()
+    );
+    expect(profile.user.nickname).toBe("PartialNick");
+    expect(profile.user.csoDistrict).toBe("Suthep"); // Unchanged
+    expect(profile.travelLegs).toHaveLength(1); // Unchanged
+  });
+
+  it("throws NOT_FOUND if the user is unregistered", async () => {
+    await expect(
+      RpkmRegistrationService.updateProfile(authUser(), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

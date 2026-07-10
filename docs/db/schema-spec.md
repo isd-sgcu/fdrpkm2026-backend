@@ -47,6 +47,9 @@ students
   allergies, dietary, medical_notes
   role          'student' | 'staff'  -- staff register same as students
   pno_sgcu_awareness  text (nullable)  -- survey (P&O): familiarity with SGCU; answer code, frontend-owned
+  cso_district        text (nullable)  -- CSO: home sub-district (free text)
+  cso_province        text (nullable)  -- CSO: home province (free text)
+  bottle              boolean (nullable) -- Did student bring water bottle
   created_at, updated_at
 ```
 
@@ -63,6 +66,7 @@ registrations
   attended_days    int (nullable; RPKM carbon form — how many days attended)
   group_id         fk → groups (nullable; RPKM rows only — the student's one group)
   pno_referral_source  text (nullable)  -- survey (P&O): publicity channel seen; answer code, frontend-owned
+  staff_role       'firstdate' | 'rpkm' | 'walkrally' | 'freshmennight' (nullable) -- staff role in registration
   created_at
   unique(student_id, project)
 ```

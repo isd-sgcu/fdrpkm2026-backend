@@ -15,6 +15,8 @@ export const houses = t.pgTable("houses", {
 
 // friend group (<=4). leaderId runs it; members live on registrations.groupId (leader is also a member).
 // assignedHouseId set by the draw. joinCode = regenerable 6-digit.
+// confirmedAt set by the leader (POST /rpkm/houses/confirm) once all 5 house
+// picks are in — locks house-preferences/members for this group after that.
 export const groups = t.pgTable("groups", {
   ...id,
   leaderId: t
@@ -26,6 +28,7 @@ export const groups = t.pgTable("groups", {
     .uuid("assigned_house_id")
     .references(() => houses.id, { onDelete: "restrict" }),
   assignedAt: t.timestamp("assigned_at", { withTimezone: true }),
+  confirmedAt: t.timestamp("confirmed_at", { withTimezone: true }),
   ...timestamps
 });
 

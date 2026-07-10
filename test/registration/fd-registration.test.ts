@@ -4,12 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 
-import type { Database } from "../src/db";
-import * as schema from "../src/db/schema";
-import { FdRegistrationService } from "../src/services/fd-registration.service";
-import { RpkmRegistrationService } from "../src/services/rpkm-registration.service";
+import type { Database } from "../../src/db";
+import * as schema from "../../src/db/schema";
+import { FdRegistrationService } from "../../src/services/fd-registration.service";
+import { RpkmRegistrationService } from "../../src/services/rpkm-registration.service";
 
-const { registerFd, getMe } = FdRegistrationService;
+const { registerFd, getMe, getProfile } = FdRegistrationService;
 
 let client: PGlite;
 let db: PgliteDatabase<typeof schema>;
@@ -46,6 +46,8 @@ const leg = (over: Record<string, unknown> = {}) => ({
 
 const validInput = (over: Record<string, unknown> = {}) => ({
   pdpaConsent: true,
+  csoDistrict: "Suthep",
+  csoProvince: "Chiang Mai",
   travelLegs: [leg()],
   ...over
 });
@@ -176,23 +178,91 @@ describe("registerFd — insert-only", () => {
   });
 });
 
-describe("getMe (FirstDate)", () => {
+describe("registerFd — access control", () => {
+  it("rejects non-freshmen registration", async () => {
+    await expect(
+      registerFd(authUser({ email: "6612345678@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+    expect(await db.select().from(schema.registrations)).toHaveLength(0);
+  });
+
+  it("prevent pre-seeded staff from registering", async () => {
+    // Seed a staff user
+    await db.insert(schema.students).values({
+      studentId: "staffuser",
+      email: "staffuser@student.chula.ac.th",
+      firstName: "Staff",
+      lastName: "Member",
+      role: "staff"
+    });
+
+    await expect(
+      registerFd(authUser({ email: "staffuser@student.chula.ac.th" }), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
+  });
+
+  it("allows non-freshman to call getProfile", async () => {
+    const me = await getProfile(authUser({ email: "6612345678@student.chula.ac.th" }), injected());
+    expect(me.user.id).toBeNull();
+  });
+});
+
+describe("getProfile (FirstDate)", () => {
   it("returns saved data with pnoSgcuAwareness on user and no group field", async () => {
     await registerFd(authUser(), validInput({ pnoSgcuAwareness: "instagram" }), injected());
-    const me = await getMe(authUser(), injected());
-    expect(me.user.studentCode).toBe("6912345678");
+    const me = await getProfile(authUser(), injected());
+    expect(me.user.studentId).toBe("6912345678");
     expect(me.user.pnoSgcuAwareness).toBe("instagram");
+    expect(me.user.csoDistrict).toBe("Suthep");
+    expect(me.user.csoProvince).toBe("Chiang Mai");
+    expect(me.user.bottle).toBeNull(); // not sent in registrationBody, defaults null
     expect(me.registration?.pdpaConsent).toBe(true);
     expect(me.travelLegs).toHaveLength(1);
     expect("group" in me).toBe(false);
   });
 
   it("returns a stable empty shape (id null) for a never-registered user", async () => {
-    const me = await getMe(authUser(), injected());
+    const me = await getProfile(authUser(), injected());
     expect(me.user.id).toBeNull();
     expect(me.user.pnoSgcuAwareness).toBeNull();
+    expect(me.user.csoDistrict).toBeNull();
+    expect(me.user.csoProvince).toBeNull();
+    expect(me.user.bottle).toBeNull();
     expect(me.registration).toBeNull();
     expect(me.travelLegs).toEqual([]);
+  });
+});
+
+describe("getMe (FirstDate) - debloated", () => {
+  it("returns debloated user info if registered", async () => {
+    const regResult = await registerFd(authUser(), validInput(), injected());
+    const me = await getMe(authUser(), injected());
+    expect(me).toEqual({
+      id: regResult.userId,
+      studentId: "6912345678",
+      firstName: "Somchai",
+      lastName: "Jaidee",
+      role: "student",
+      registered: true
+    });
+  });
+
+  it("returns debloated user info if not registered", async () => {
+    const me = await getMe(authUser(), injected());
+    expect(me).toEqual({
+      id: null,
+      studentId: "6912345678",
+      firstName: "Somchai",
+      lastName: "Jaidee",
+      role: "student",
+      registered: false
+    });
+  });
+
+  it("throws NOT_FRESHMEN for non-freshman when student record is absent", async () => {
+    await expect(
+      getMe(authUser({ email: "6612345678@student.chula.ac.th" }), injected())
+    ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
   });
 });
 
@@ -225,5 +295,60 @@ describe("FirstDate + RPKM share one student, separate registrations", () => {
     expect(rpkmReg.groupId).toBe(rpkm.group.id); // RPKM: solo group
 
     expect(await db.select().from(schema.groups)).toHaveLength(1); // only the RPKM one
+  });
+});
+
+describe("updateProfile (FirstDate)", () => {
+  it("successfully updates student fields and replaces travel legs", async () => {
+    await registerFd(authUser(), validInput(), injected());
+
+    const updatePayload = validInput({
+      nickname: "NewNick",
+      faculty: "Engineering",
+      allergies: "peanuts",
+      dietary: "vegan",
+      medicalNotes: "asthma",
+      travelLegs: [
+        leg({ originDistrict: "Bang Kruai", originProvince: "Nonthaburi" }),
+        leg({ originDistrict: "Sathon", originProvince: "Bangkok" })
+      ]
+    });
+
+    const profile = await FdRegistrationService.updateProfile(
+      authUser(),
+      updatePayload,
+      injected()
+    );
+    expect(profile.user.nickname).toBe("NewNick");
+    expect(profile.user.faculty).toBe("Engineering");
+    expect(profile.user.allergies).toBe("peanuts");
+    expect(profile.user.dietary).toBe("vegan");
+    expect(profile.user.medicalNotes).toBe("asthma");
+    expect(profile.travelLegs).toHaveLength(2);
+    expect(profile.travelLegs[0].originDistrict).toBe("Bang Kruai");
+    expect(profile.travelLegs[1].originDistrict).toBe("Sathon");
+  });
+
+  it("successfully performs partial update without changing travel legs", async () => {
+    await registerFd(authUser(), validInput(), injected());
+
+    const partialPayload = {
+      nickname: "PartialNick"
+    };
+
+    const profile = await FdRegistrationService.updateProfile(
+      authUser(),
+      partialPayload,
+      injected()
+    );
+    expect(profile.user.nickname).toBe("PartialNick");
+    expect(profile.user.csoDistrict).toBe("Suthep"); // Unchanged
+    expect(profile.travelLegs).toHaveLength(1); // Unchanged
+  });
+
+  it("throws NOT_FOUND if the user is unregistered", async () => {
+    await expect(
+      FdRegistrationService.updateProfile(authUser(), validInput(), injected())
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

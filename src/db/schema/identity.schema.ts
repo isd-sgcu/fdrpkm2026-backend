@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
 
-import { prefixEnum, projectEnum, roleEnum, vehicleEnum } from "./enums";
+import { prefixEnum, projectEnum, roleEnum, vehicleEnum, staffRoleEnum } from "./enums";
 import { id, timestamps } from "./helper";
 import { groups } from "./houses.schema";
 
@@ -32,6 +32,10 @@ export const students = t.pgTable(
     role: roleEnum("role").notNull().default("student"),
     // P&O survey: SGCU awareness. frontend sends the answer code.
     pnoSgcuAwareness: t.text("pno_sgcu_awareness"),
+    // CSO: student's home sub-district and province (free text).
+    csoDistrict: t.text("cso_district"),
+    csoProvince: t.text("cso_province"),
+    bottle: t.boolean("bottle"),
     ...timestamps
   },
   (table) => [t.uniqueIndex("students_email_unique").on(sql`lower(${table.email})`)]
@@ -53,6 +57,7 @@ export const registrations = t.pgTable(
     groupId: t.uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
     // P&O survey: where they saw the publicity. frontend sends the answer code.
     pnoReferralSource: t.text("pno_referral_source"),
+    staffRole: staffRoleEnum("staff_role"),
     ...timestamps
   },
   (table) => [

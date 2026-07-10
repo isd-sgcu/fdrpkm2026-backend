@@ -1,7 +1,10 @@
+import { type FdProfileResult } from "@src/models/fd-registration.model";
 import {
   getRegistrationMe,
+  getRegistrationProfile,
   RegistrationServiceError,
   submitRegistration,
+  updateRegistrationProfile,
   type AuthUser,
   type MeResult,
   type RegisterDeps,
@@ -18,7 +21,7 @@ import {
 
 // FirstDate results never carry a group.
 export type FdRegisterResult = Omit<RegisterResult, "group">;
-export type FdMeResult = Omit<MeResult, "group">;
+export type FdMeResult = MeResult;
 
 const registerFd = async (
   authUser: AuthUser,
@@ -38,13 +41,60 @@ const getMe = async (
   authUser: AuthUser,
   deps: { db?: RegisterDeps["db"] } = {}
 ): Promise<FdMeResult> => {
-  const { user, registration, travelLegs } = await getRegistrationMe(authUser, "firstdate", deps);
-  return { user, registration, travelLegs };
+  return getRegistrationMe(authUser, "firstdate", deps);
+};
+
+const getProfile = async (
+  authUser: AuthUser,
+  deps: { db?: RegisterDeps["db"] } = {}
+): Promise<FdProfileResult> => {
+  const { user, registration, travelLegs } = await getRegistrationProfile(
+    authUser,
+    "firstdate",
+    deps
+  );
+  if (registration) {
+    return {
+      user,
+      registration: {
+        pdpaConsent: registration.pdpaConsent,
+        pnoReferralSource: registration.pnoReferralSource
+      },
+      travelLegs
+    };
+  }
+  return { user, registration: null, travelLegs };
+};
+
+const updateProfile = async (
+  authUser: AuthUser,
+  input: Partial<RegistrationInput>,
+  deps: RegisterDeps = {}
+): Promise<FdProfileResult> => {
+  const { user, registration, travelLegs } = await updateRegistrationProfile(
+    authUser,
+    "firstdate",
+    input,
+    deps
+  );
+  if (registration) {
+    return {
+      user,
+      registration: {
+        pdpaConsent: registration.pdpaConsent,
+        pnoReferralSource: registration.pnoReferralSource
+      },
+      travelLegs
+    };
+  }
+  return { user, registration: null, travelLegs };
 };
 
 // Namespace object — routes call `FdRegistrationService.<fn>(...)`.
 export const FdRegistrationService = {
   FdRegistrationServiceError: RegistrationServiceError,
   registerFd,
-  getMe
+  getMe,
+  getProfile,
+  updateProfile
 };
