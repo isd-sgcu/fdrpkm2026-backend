@@ -84,6 +84,44 @@ Table entries {
   }
 }
 
+Table walk_rally_activities {
+  id uuid [pk, default: `gen_random_uuid()`]
+  code varchar [unique, note: 'name and desc in i18n. 8 rows: 3 workshop 4 museum 1 minigame']
+  kind varchar [note: 'workshop museum or minigame']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+}
+
+Table walk_rally_registrations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [ref: > students.id]
+  activity_id uuid [ref: > walk_rally_activities.id]
+  round int [note: 'CHECK between 1 and 6. round times live in app config']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (student_id, activity_id) [unique, note: 'cannot register same activity twice']
+    (student_id, round) [unique, note: 'no overlapping time slots. all activities share the 6 round times']
+    (activity_id, round) [note: 'capacity count. cap 30 per slot enforced in tx']
+  }
+}
+
+Table walk_rally_attendances {
+  id uuid [pk, default: `gen_random_uuid()`]
+  student_id uuid [ref: > students.id, note: 'gets 1 point. walk-in allowed so registration not required']
+  activity_id uuid [ref: > walk_rally_activities.id]
+  scanned_by uuid [ref: > students.id, note: 'staff who scanned after the slot ended']
+  scanned_at timestamptz [note: 'event time of the scan']
+  created_at timestamptz [default: `now()`]
+  updated_at timestamptz [default: `now()`]
+
+  indexes {
+    (student_id, activity_id) [unique, note: 'one point per activity. repeat scan is a silent no-op']
+    student_id [note: 'points = row count per student. reward at 4']
+  }
+}
+
 Table checkpoints {
   id uuid [pk, default: `gen_random_uuid()`]
   game varchar [note: 'jigsaw 10 points or csr 35 points']

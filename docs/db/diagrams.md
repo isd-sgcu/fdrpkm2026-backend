@@ -17,6 +17,11 @@ erDiagram
     groups ||--o{ group_house_choices : ranks
     houses ||--o{ group_house_choices : ranked_in
     houses ||--o{ groups : assigned_to
+    students ||--o{ walk_rally_registrations : books
+    walk_rally_activities ||--o{ walk_rally_registrations : has_slots
+    students ||--o{ walk_rally_attendances : attends
+    students ||--o{ walk_rally_attendances : wr_scanned_by
+    walk_rally_activities ||--o{ walk_rally_attendances : credits
 
     students {
         uuid id PK
@@ -71,6 +76,27 @@ erDiagram
         text event "firstdate or freshmennight or rpkm"
         timestamptz scanned_at
         unique student_event "uniq(student_id, event)"
+    }
+    walk_rally_activities {
+        uuid id PK
+        text code UK "i18n key; 8 rows"
+        text kind "workshop | museum | minigame"
+    }
+    walk_rally_registrations {
+        uuid id PK
+        uuid student_id FK
+        uuid activity_id FK
+        int round "1..6; times in config"
+        unique student_activity "uniq(student_id, activity_id)"
+        unique student_round "uniq(student_id, round)"
+    }
+    walk_rally_attendances {
+        uuid id PK
+        uuid student_id FK "1 point; walk-in OK"
+        uuid activity_id FK
+        uuid scanned_by FK "staff"
+        timestamptz scanned_at
+        unique student_activity "uniq(student_id, activity_id)"
     }
     checkpoints {
         uuid id PK
@@ -179,6 +205,26 @@ stateDiagram-v2
         must kick/disband first
     end note
 ```
+
+## Walk rally flow (31/7, reg 22/7–29/7)
+
+```mermaid
+flowchart TD
+    Open[22/7 00:00 reg opens] --> Pick[Pick activity + round slot]
+    Pick --> Checks{same activity done?<br/>same round taken?<br/>slot full 30?}
+    Checks -- any yes --> Blocked[Blocked]
+    Checks -- all no --> Booked[(walk_rally_registrations)]
+    Booked --> Edit[edit/cancel until 29/7 23:59]
+    Edit --> Pick
+    Booked --> Day[31/7 show reg screen to enter]
+    WalkIn[No reg? staff seats if space] --> Slot[Attend slot]
+    Day --> Slot
+    Slot --> Scan[[Staff scans QR after slot]]
+    Scan --> Att[(walk_rally_attendances:<br/>upsert; dup = no-op)]
+    Att --> Points[points = row count; reward at 4]
+```
+
+> Registration counts exported to walk-rally team 30/7; attendance dump after the event.
 
 ## RPKM houses timeline
 

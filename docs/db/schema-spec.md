@@ -110,6 +110,22 @@ const STATIC = {
   my_freshy_story: { open: "…", close: "…", formUrl: "…" }
 };
 const FD_EVENT_VISIBLE = true; // flip false + redeploy after the 18th
+const WALK_RALLY = {
+  regOpen: "2026-07-22T00:00+07",
+  regClose: "2026-07-29T23:59+07",
+  eventDate: "2026-07-31", // 12:00-16:00
+  capacityPerSlot: 30,
+  rewardPoints: 4, // prize threshold; max attainable = 6 (one point per round)
+  rounds: [
+    // round times shared by ALL activities → "overlap" check = same round
+    { round: 1, start: "12:00", end: "12:30" },
+    { round: 2, start: "12:35", end: "13:05" },
+    { round: 3, start: "13:10", end: "13:40" },
+    { round: 4, start: "14:20", end: "14:50" },
+    { round: 5, start: "14:55", end: "15:25" },
+    { round: 6, start: "15:30", end: "16:00" }
+  ]
+};
 ```
 
 Server reads this to gate scans (window / year-one / gps); frontend reads it to enable/disable buttons. Static pages = frontend pages + config date gate. No DB rows for any of it.
@@ -127,6 +143,42 @@ entries
 ```
 
 Staff scans participant QR (or types student_id on scan failure) → insert. Dedupe via unique. (FD home button hide-after-event = `FD_EVENT_VISIBLE` config flag, redeploy.)
+
+### Walk rally (31/7 — slot registration + attendance points)
+
+8 activities (3 workshops, 4 museums, 1 board-game minigame) × 6 rounds = 48 slots, 30 people each, first-come-first-serve. Rounds/times/capacity live in `WALK_RALLY` config (above); activity names/descriptions in i18n keyed by `code` (same convention as houses).
+
+```
+walk_rally_activities                     -- 8 seeded rows
+  id     pk
+  code   text unique                      -- i18n key: lookchub | phimsen_nam | tote_bag_paint |
+                                          --   cu_museum | memorial_hall | natural_history | living_plants |
+                                          --   board_games
+  kind   'workshop' | 'museum' | 'minigame'
+
+walk_rally_registrations                  -- pre-registration (intent; editable until regClose)
+  id           pk
+  student_id   fk → students
+  activity_id  fk → walk_rally_activities
+  round        int                        -- 1..6; CHECK (round between 1 and 6)
+  unique(student_id, activity_id)         -- same activity only once
+  unique(student_id, round)               -- no overlapping slots (all activities share round times)
+  index(activity_id, round)               -- capacity count
+
+walk_rally_attendances                    -- fact (staff scan after the slot; immutable)
+  id           pk
+  student_id   fk → students              -- gets 1 point; walk-in OK (no registration row needed)
+  activity_id  fk → walk_rally_activities
+  scanned_by   fk → students              -- staff (contact list; role = staff)
+  scanned_at   timestamptz default now()
+  unique(student_id, activity_id)         -- one point per activity; repeat scan = silent no-op (upsert do-nothing)
+```
+
+- **Capacity**: insert inside a transaction — `SELECT count(*) … WHERE (activity_id, round) FOR UPDATE`-style guard (or serializable); reject at 30.
+- **Edit/cancel**: delete the registration row until `regClose`; after that read-only.
+- **Points**: derived — `count(*)` of `walk_rally_attendances` per student; reward at `rewardPoints` (4); max 6. No points column, no prize table.
+- **Walk-in**: attendance insert without a registration row — registration never checked at scan time.
+- **Exports**: 30/7 → registration counts per (activity, round) for the walk-rally team; after event → attendance dump.
 
 ### QR checkpoints + scan log (jigsaw, CSR — multi-point games)
 
@@ -240,7 +292,9 @@ group_house_choices
 5. **RPKM houses** → list visible always (i18n), register opens 18/7 → solo group exists; join via code / kick / leave / disband per rules (all via `registrations.group_id`); leader sets rank 1–5 → `group_house_choices`; 22/7 close; 23–25/7 batch random → `groups.assigned_house_id`; 26/7 members read assignment.
 6. **RPKM games** → year-one gate (`69%`) + window (config) → scan static QR → `scans` (dedupe + timestamp); progress = my scans / total; stats export grouped by `checkpoints.game`.
 7. **RPKM static** (field_trip, my_freshy_story) → in window (config) → button → `formUrl`; else disabled.
-8. **Admin** → hide FD after 18th (`FD_EVENT_VISIBLE=false`, redeploy); games auto-disable via config `close`; exports via SQL.
+8. **Walk rally reg** (22/7 00:00 – 29/7 23:59) → pick (activity, round) slots freely; blocked if: same activity already picked, same round already picked, or slot full (30). Change/cancel = delete row + re-insert, until close. Day-of: show own registration screen to enter; walk-ins seated by staff if space — nothing recorded at entry.
+9. **Walk rally scan** (31/7, after each slot) → staff opens scan page → scans น้อง QR (`student_id`) → upsert `walk_rally_attendances` (registered **and** walk-in alike); duplicate for same activity = no-op, no error. Points = attendance count; reward at 4.
+10. **Admin** → hide FD after 18th (`FD_EVENT_VISIBLE=false`, redeploy); games auto-disable via config `close`; exports via SQL (incl. walk-rally reg counts on 30/7, attendance after event).
 
 ## Windows (from requirements → app config, not DB)
 
@@ -252,10 +306,13 @@ group_house_choices
 | csr                         | 20/7 – 7/8        | year-one, ~35 checkpoints, requireGps |
 | field_trip                  | per calendar      | year-one, gg form                     |
 | my_freshy_story             | per calendar      | year-one, gg form                     |
+| walk rally reg              | 22/7 00:00 – 29/7 23:59 | fcfs, 30/slot, edit until close |
+| walk rally scans            | 31/7 12:00–16:00  | staff scan per slot, walk-in included |
 
 ## Out of scope / skipped (YAGNI)
 
-- **Prize tables** — threshold query on `scans`. Add when prize logic is defined.
+- **Prize tables** — threshold query on `scans` (games) / `walk_rally_attendances` (walk rally, ≥4). Add when redemption logic is defined.
+- **Walk rally rounds table** — 6 fixed rounds, times never change → `WALK_RALLY.rounds` config; `round` stored as int 1..6.
 - **Freshmen Night** — entry scan via `entries` (event `freshmennight`, part of RPKM); activities themselves use CUDSON, not our system.
 - **Personality test** — not this year.
 - **Fest registration / capacity / full-check** — not our system anymore. Dropped `activity_signups` + `activities.capacity`.
@@ -265,10 +322,10 @@ group_house_choices
 - **Leadership transfer** — leader leaving disbands instead.
 - **group_members join table** — invariant makes membership 1:1 → `registrations.group_id` instead.
 - **house_assignments table** — 1:1 result → `groups.assigned_house_id` instead.
-- **activities table** — dates/flags are fixed → hardcoded app config. `checkpoints.game` replaces the FK.
+- **activities table** — dates/flags are fixed → hardcoded app config. `checkpoints.game` replaces the FK. (Walk rally is different: it needs per-activity FKs for slot uniqueness → its own `walk_rally_activities`.)
 
 ## Resolved
 
 - Year-one check = `student_id LIKE '69%'`. Derived everywhere, no column.
-- Freshmen Night = CUDSON, not in scope.
+- Freshmen Night = CUDSON for activities; our system only records entry scans (`entries`, event `freshmennight`).
 - GPS gate = on by default, `GAMES[game].requireGps` config toggles it. lat/lng always stored.

@@ -21,7 +21,7 @@ The two websites stay completely independent in look and code. The **only** thin
 
 ## What we store (each "table" = a list of things)
 
-Think of each table as a spreadsheet/list. Here are all 9:
+Think of each table as a spreadsheet/list. Here are all 12:
 
 ### People & signups
 
@@ -32,6 +32,11 @@ Think of each table as a spreadsheet/list. Here are all 9:
 ### Event entry scans
 
 - **entries** — when a staff scans a น้อง's QR at an event entrance, we record it here. Each event is scanned separately (`event` = `firstdate` | `freshmennight` | `rpkm`), so up to three rows per น้อง — one per event. If scanning fails, staff can type the student ID instead — same result.
+
+### Walk rally (31 July, 12:00–16:00)
+- **walk_rally_activities** — the 8 activities: 3 workshops (ลูกชุบ, พิมเสนน้ำ, เพ้นท์ถุงผ้า), 4 museums, 1 board-game minigame. Names/descriptions live in the i18n files, keyed by code.
+- **walk_rally_registrations** — a น้อง's pre-booked slots (activity + round 1–6). Rules baked in: can't book the same activity twice, can't book two things in the same round, each slot caps at 30 (first come, first serve). Can change/cancel until reg closes 29 July 23:59.
+- **walk_rally_attendances** — after each slot, staff scan the น้อง's QR to record they actually attended → 1 point per activity. Walk-ins (no pre-booking) get scanned and counted the same way. Scanning the same activity twice does nothing (no error). Collect 4+ points → reward.
 
 ### RPKM stamp games (Jigsaw + CSR)
 
@@ -54,6 +59,7 @@ Think of each table as a spreadsheet/list. Here are all 9:
 
 - _FirstDate:_ staff scan น้อง to mark attendance.
 - _Games:_ น้อง scan the static QR posted at each point. The server checks: is the game open right now? are they a first-year? are they actually near the point (GPS)? Already scanned this point? If all good → recorded.
+- _Walk rally:_ น้อง show their booked-slot screen to enter; after each slot ends, staff scan their QR → 1 point per activity (walk-ins too).
 
 **GPS check.** Each game point has a real location. When a น้อง scans, their phone sends its location and we check they're close enough. This is **on by default** but can be switched off instantly (in a config setting) if it causes trouble on game day — for example if GPS is flaky indoors.
 
