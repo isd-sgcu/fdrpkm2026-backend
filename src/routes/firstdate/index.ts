@@ -25,11 +25,11 @@ export const firstdateRoutes = new Elysia({ prefix: "/fd" })
     }
   })
   .post(
-    "/checkin/freshmennight",
+    "/checkin/registration",
     async ({ user, body, status }) => {
       try {
         const staffCunetId = user.email?.split("@")[0] ?? "";
-        const entry = await FirstDateService.checkinFreshmenNight(staffCunetId, body.student_id);
+        const entry = await FirstDateService.checkinFirstDate(staffCunetId, body.student_id);
         return { success: true as const, data: entry };
       } catch (err) {
         if (err instanceof FirstDateService.FirstDateServiceError || err instanceof CheckinError) {

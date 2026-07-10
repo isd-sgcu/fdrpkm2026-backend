@@ -14,7 +14,7 @@ export class CheckinError extends Error {
   }
 }
 
-type CheckinProject = "rpkm" | "freshmennight";
+type CheckinProject = "rpkm" | "freshmennight" | "firstdate";
 
 export async function checkinStudent(
   params: {
@@ -31,10 +31,7 @@ export async function checkinStudent(
   if (!student) throw new CheckinError("STUDENT_NOT_FOUND");
 
   const [staff] = await db.select().from(students).where(eq(students.studentId, staffCunetId));
-  if (!staff) throw new CheckinError("STUDENT_NOT_FOUND");
-
-  if (staff.role !== "staff") throw new CheckinError("FORBIDDEN_NOT_STAFF");
-
+  if (!staff || staff.role !== "staff") throw new CheckinError("FORBIDDEN_NOT_STAFF");
   const newEntry: NewEntry = { project, studentId: student.id, scannedBy: staff.id };
 
   try {

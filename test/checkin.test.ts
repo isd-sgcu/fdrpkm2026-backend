@@ -122,11 +122,11 @@ describe("checkinStudent", () => {
       {
         studentCunetId: student.studentId,
         staffCunetId: staff.studentId,
-        project: "freshmennight"
+        project: "firstdate"
       },
       injected()
     );
 
-    expect(entry.project).toBe("freshmennight");
+    expect(entry.project).toBe("firstdate");
   });
 });

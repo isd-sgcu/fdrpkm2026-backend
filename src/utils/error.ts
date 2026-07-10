@@ -26,9 +26,7 @@ export const AppErrorCode = {
   /** 409: user already exists, cannot register again. */
   USER_ALREADY_EXISTS: "USER_ALREADY_EXISTS",
   /** 422: request body failed schema validation. */
-  VALIDATION: "VALIDATION",
-  /** 422: payload failed shape/format validation. */
-  VALIDATION_ERROR: "VALIDATION_ERROR"
+  VALIDATION: "VALIDATION"
 } as const;
 
 /** Union of AppErrorCode key names, e.g. "NOT_FOUND". */

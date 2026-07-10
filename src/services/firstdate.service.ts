@@ -22,11 +22,11 @@ const getFirstDateProfile = (user: { name: string }): { name: string } => ({
 // Namespace object — routes call `FirstDateService.getFirstDateProfile(...)`
 // instead of importing individual functions.
 
-const checkinFreshmenNight = (staffCunetId: string, studentCunetId: string) =>
-  checkinStudent({ studentCunetId, staffCunetId, project: "freshmennight" }, { db });
+const checkinFirstDate = (staffCunetId: string, studentCunetId: string) =>
+  checkinStudent({ studentCunetId, staffCunetId, project: "firstdate" }, { db });
 
 export const FirstDateService = {
   FirstDateServiceError,
   getFirstDateProfile,
-  checkinFreshmenNight
+  checkinFirstDate
 };
