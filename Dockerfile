@@ -1,4 +1,4 @@
-FROM oven/bun:1 AS deps
+FROM oven/bun:1.3.14 AS deps
 WORKDIR /app
 
 COPY package.json bun.lock ./
@@ -9,7 +9,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN bun run build
 
-FROM oven/bun:1 AS runtime
+FROM oven/bun:1.3.14 AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
@@ -22,7 +22,7 @@ COPY --from=build --chown=bun:bun /app/package.json ./package.json
 USER bun
 EXPOSE 8080
 
-# HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-#   CMD ["bun", "-e", "const port = process.env.PORT || '3000'; const res = await fetch('http://127.0.0.1:' + port + '/api/v1/health'); if (!res.ok) process.exit(1);"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["bun", "-e", "const port = process.env.PORT || '8080'; const res = await fetch('http://127.0.0.1:' + port + '/v1/health'); if (!res.ok) process.exit(1);"]
 
 CMD ["bun", "dist/index.js"]
