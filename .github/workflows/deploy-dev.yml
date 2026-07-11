@@ -1,0 +1,287 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches:
+      - dev
+
+# Keep default permissions minimal. The deploy job grants id-token only where
+# Workload Identity Federation needs it.
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: true
+
+env:
+  APP_NAME: fdrpkm2026-backend
+  CONTAINER_PORT: "8080"
+  IMAGE_TAG_SHA: ${{ github.sha }}
+  IMAGE_TAG_LATEST: dev-latest
+
+jobs:
+  # This job must pass before the workflow is allowed to push an image or deploy.
+  validate:
+    name: Test and Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run lint
+        run: bun run lint
+
+      - name: Run unit tests
+        run: bun test
+
+      - name: Build application locally
+        run: bun run build
+
+  deploy-dev:
+    name: Push Image and Deploy Dev
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+      url: ${{ steps.candidate.outputs.service_url }}
+    timeout-minutes: 35
+    needs:
+      - validate
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY }}
+      CLOUD_RUN_SERVICE_DEV: ${{ vars.CLOUD_RUN_SERVICE_DEV }}
+      HEALTH_PATH: ${{ vars.CLOUD_RUN_HEALTH_PATH || '/health' }}
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker auth for Artifact Registry
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Set image names
+        id: image
+        run: |
+          IMAGE_BASE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GAR_REPOSITORY}/${APP_NAME}"
+          echo "base=${IMAGE_BASE}" >> "$GITHUB_OUTPUT"
+          echo "sha=${IMAGE_BASE}:${IMAGE_TAG_SHA}" >> "$GITHUB_OUTPUT"
+          echo "latest=${IMAGE_BASE}:${IMAGE_TAG_LATEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Capture current Cloud Run traffic for rollback
+        id: previous-traffic
+        run: |
+          TRAFFIC="$(gcloud run services describe "${CLOUD_RUN_SERVICE_DEV}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --format="value(status.traffic[].revisionName,status.traffic[].percent)" \
+            | awk 'NF == 2 { printf "%s=%s,", $1, $2 }' \
+            | sed 's/,$//')"
+
+          if [ -z "$TRAFFIC" ]; then
+            echo "::warning::No existing Cloud Run traffic found. Automatic rollback will be skipped if promotion fails."
+          fi
+
+          echo "traffic=${TRAFFIC}" >> "$GITHUB_OUTPUT"
+
+      # GitHub Actions cache keeps Docker layers reusable across workflow runs.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.sha }}
+            ${{ steps.image.outputs.latest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy SHA image to Cloud Run without traffic
+        # env:
+        #   BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
+        #   GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+        #   S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+        #   S3_REGION: ${{ vars.S3_REGION || 'auto' }}
+        #   S3_BUCKET: ${{ vars.S3_BUCKET }}
+        #   ASSET_BASE_URL: ${{ vars.ASSET_BASE_URL }}
+        #   DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        #   BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+        #   GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        #   S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+        #   S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+        run: |
+          gcloud run deploy "${CLOUD_RUN_SERVICE_DEV}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --image "${{ steps.image.outputs.sha }}" \
+            --platform managed \
+            --port "${CONTAINER_PORT}" \
+            --tag "candidate" \
+            --no-traffic \
+            --update-env-vars "NODE_ENV=development" \
+            --update-env-vars "BETTER_AUTH_URL=${BETTER_AUTH_URL}" \
+            --update-env-vars "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" \
+            --update-env-vars "S3_ENDPOINT=${S3_ENDPOINT}" \
+            --update-env-vars "S3_REGION=${S3_REGION}" \
+            --update-env-vars "S3_BUCKET=${S3_BUCKET}" \
+            --update-env-vars "ASSET_BASE_URL=${ASSET_BASE_URL}" \
+            --update-env-vars "DATABASE_URL=${DATABASE_URL}" \
+            --update-env-vars "BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}" \
+            --update-env-vars "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}" \
+            --update-env-vars "S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}" \
+            --update-env-vars "S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}" \
+            --quiet \
+            --timeout 300s
+
+      # The candidate tag gives us a revision-specific URL for pre-traffic health checks.
+      - name: Get candidate revision and URLs
+        id: candidate
+        run: |
+          SERVICE_URL="$(gcloud run services describe "${CLOUD_RUN_SERVICE_DEV}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --format='value(status.url)')"
+
+          CANDIDATE_REVISION="$(gcloud run services describe "${CLOUD_RUN_SERVICE_DEV}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --format='value(status.latestReadyRevisionName)')"
+
+          CANDIDATE_URL="$(echo "$SERVICE_URL" | sed 's#https://#https://candidate---#')"
+
+          echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
+          echo "candidate_url=${CANDIDATE_URL}" >> "$GITHUB_OUTPUT"
+          echo "revision=${CANDIDATE_REVISION}" >> "$GITHUB_OUTPUT"
+          echo "Cloud Run service URL: ${SERVICE_URL}"
+          echo "Candidate revision: ${CANDIDATE_REVISION}"
+
+      - name: Health check candidate revision before traffic
+        env:
+          CANDIDATE_URL: ${{ steps.candidate.outputs.candidate_url }}
+        run: |
+          HEALTH_URL="${CANDIDATE_URL%/}${HEALTH_PATH}"
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            STATUS_CODE="$(curl --silent --show-error --output /tmp/candidate-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
+
+            if [ "$STATUS_CODE" = "200" ]; then
+              echo "Candidate health check passed: ${HEALTH_URL}"
+              exit 0
+            fi
+
+            echo "Candidate health check attempt ${attempt} failed with HTTP ${STATUS_CODE}"
+            sleep 10
+          done
+
+          echo "::error::Candidate health check failed for ${HEALTH_URL}"
+          cat /tmp/candidate-health.txt || true
+          exit 1
+
+      - name: Promote candidate revision to 100 percent traffic
+        id: promote
+        run: |
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_DEV}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --to-tags candidate=100 \
+            --quiet
+
+          echo "promoted=true" >> "$GITHUB_OUTPUT"
+
+      - name: Output deployed Cloud Run service URL
+        run: |
+          echo "Cloud Run service URL: ${{ steps.candidate.outputs.service_url }}"
+
+      - name: Health check promoted service
+        id: promoted-health
+        continue-on-error: true
+        env:
+          SERVICE_URL: ${{ steps.candidate.outputs.service_url }}
+        run: |
+          HEALTH_URL="${SERVICE_URL%/}${HEALTH_PATH}"
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            STATUS_CODE="$(curl --silent --show-error --output /tmp/promoted-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
+
+            if [ "$STATUS_CODE" = "200" ]; then
+              echo "Promoted service health check passed: ${HEALTH_URL}"
+              exit 0
+            fi
+
+            echo "Promoted service health check attempt ${attempt} failed with HTTP ${STATUS_CODE}"
+            sleep 10
+          done
+
+          echo "::error::Promoted service health check failed for ${HEALTH_URL}"
+          cat /tmp/promoted-health.txt || true
+          exit 1
+
+      - name: Roll back Cloud Run traffic after failed health check
+        if: steps.promoted-health.outcome == 'failure' && steps.previous-traffic.outputs.traffic != ''
+        run: |
+          echo "::warning::Promoted health check failed. Rolling traffic back to previous revision split."
+
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_DEV}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --to-revisions "${{ steps.previous-traffic.outputs.traffic }}" \
+            --quiet
+
+      - name: Fail workflow after rollback
+        if: steps.promoted-health.outcome == 'failure'
+        run: |
+          echo "::error::Deployment failed health check. Rollback was attempted if previous traffic existed."
+          exit 1
+
+      # Only revisions that pass live traffic health get the stable tag.
+      - name: Mark healthy revision as stable
+        if: steps.promoted-health.outcome == 'success'
+        run: |
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_DEV}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --update-tags "stable=${{ steps.candidate.outputs.revision }}" \
+            --remove-tags "candidate" \
+            --quiet
+
+          echo "Stable revision: ${{ steps.candidate.outputs.revision }}"
