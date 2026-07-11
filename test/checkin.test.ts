@@ -11,7 +11,7 @@ let client: PGlite;
 let db: PgliteDatabase<typeof schema>;
 const injected = (): { db: Database } => ({ db: db as unknown as Database });
 
-const TABLES = ["students", "entries"];
+const TABLES = ["students", "registrations", "entries"];
 
 beforeAll(async () => {
   client = new PGlite();
@@ -41,6 +41,21 @@ const seedStaff = async (over: Partial<{ studentId: string; role: string }> = {}
   return staff;
 };
 
+// STAFF_GATE (checkin.helper.ts) requires a registrations row with a matching
+// staffRole, not just students.role = "staff".
+const seedStaffReg = async (
+  staffId: string,
+  project: "firstdate" | "rpkm",
+  staffRole: "firstdate" | "rpkm" | "freshmennight" | "walkrally"
+) => {
+  await db.insert(schema.registrations).values({
+    studentId: staffId,
+    project,
+    pdpaAcceptedAt: new Date(),
+    staffRole
+  });
+};
+
 const seedStudent = async (studentId = "6912345678") => {
   const [student] = await db
     .insert(schema.students)
@@ -57,6 +72,7 @@ const seedStudent = async (studentId = "6912345678") => {
 describe("checkinStudent", () => {
   it("inserts an entry when staff scans a valid student", async () => {
     const staff = await seedStaff();
+    await seedStaffReg(staff.id, "rpkm", "rpkm");
     const student = await seedStudent();
 
     const entry = await checkinStudent(
@@ -92,8 +108,22 @@ describe("checkinStudent", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN_NOT_STAFF" });
   });
 
+  it("throws FORBIDDEN_NOT_STAFF when staff has no matching staffRole for the project", async () => {
+    const staff = await seedStaff();
+    await seedStaffReg(staff.id, "rpkm", "freshmennight");
+    const student = await seedStudent();
+
+    await expect(
+      checkinStudent(
+        { studentCunetId: student.studentId, staffCunetId: staff.studentId, project: "rpkm" },
+        injected()
+      )
+    ).rejects.toMatchObject({ code: "FORBIDDEN_NOT_STAFF" });
+  });
+
   it("throws ALREADY_CHECKED_IN on duplicate scan for same project", async () => {
     const staff = await seedStaff();
+    await seedStaffReg(staff.id, "rpkm", "rpkm");
     const student = await seedStudent();
 
     await checkinStudent(
@@ -111,6 +141,8 @@ describe("checkinStudent", () => {
 
   it("allows the same student to check in to a different project", async () => {
     const staff = await seedStaff();
+    await seedStaffReg(staff.id, "rpkm", "rpkm");
+    await seedStaffReg(staff.id, "firstdate", "firstdate");
     const student = await seedStudent();
 
     await checkinStudent(

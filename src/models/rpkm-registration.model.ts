@@ -1,6 +1,5 @@
 import { Elysia, t } from "elysia";
 
-import { tSuccessResponse } from "@src/utils";
 import { registrationFields } from "./registration-fields";
 
 /**
@@ -62,7 +61,7 @@ const meResult = t.Object({
 export const RpkmRegistrationModel = new Elysia().model({
   registrationBody: rpkmRegistrationBody,
   updateProfileBody: t.Partial(rpkmRegistrationBody),
-  registrationResponse: tSuccessResponse(registrationResult),
-  meResponse: tSuccessResponse(meResult),
-  profileResponse: tSuccessResponse(profileResult)
+  registrationResult,
+  meResult,
+  profileResult
 });

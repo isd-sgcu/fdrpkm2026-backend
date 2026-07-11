@@ -1,4 +1,6 @@
 import { type RpkmProfileResult } from "@src/models/rpkm-registration.model";
+import { checkinStudent } from "@src/services/checkin.helper";
+import { db } from "@src/db";
 import {
   getRegistrationMe,
   getRegistrationProfile,
@@ -14,9 +16,12 @@ import {
 } from "./registration.service";
 
 /**
- * "Model" layer for the RPKM registration flow (project=rpkm). Thin wrapper
- * over the shared registration core — RPKM auto-creates the solo group. See
- * `src/services/registration.service.ts` for the actual logic.
+ * "Model" layer for MVC — data access + business rules for RPKM
+ * (project=rpkm, freshmennight). Routes in src/routes/rpkm call into this;
+ * they never touch storage directly.
+ *
+ * Registration/profile logic is a thin wrapper over the shared registration
+ * core (see registration.service.ts) — RPKM auto-creates the solo group.
  */
 
 // RPKM always creates a solo group, so `group` is non-null (the core returns
@@ -90,12 +95,21 @@ const updateProfile = async (
   return { user, registration: null, travelLegs, group };
 };
 
-// Namespace object — routes call `RpkmRegistrationService.<fn>(...)`. The error
-// class is the shared one; the alias keeps the route's instanceof check stable.
-export const RpkmRegistrationService = {
-  RpkmRegistrationServiceError: RegistrationServiceError,
+const checkinRegistration = (staffCunetId: string, studentCunetId: string) =>
+  checkinStudent({ studentCunetId, staffCunetId, project: "rpkm" }, { db });
+
+const checkinFreshmenNight = (staffCunetId: string, studentCunetId: string) =>
+  checkinStudent({ studentCunetId, staffCunetId, project: "freshmennight" }, { db });
+
+// Namespace object — routes call `RpkmService.<fn>(...)`. The error class is
+// the shared registration core's; the alias keeps the route's instanceof
+// check stable.
+export const RpkmService = {
+  RpkmServiceError: RegistrationServiceError,
   registerRpkm,
   getMe,
   getProfile,
-  updateProfile
+  updateProfile,
+  checkinRegistration,
+  checkinFreshmenNight
 };

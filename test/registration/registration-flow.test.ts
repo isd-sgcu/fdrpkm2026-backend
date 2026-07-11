@@ -6,8 +6,8 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 
 import type { Database } from "../../src/db";
 import * as schema from "../../src/db/schema";
-import { FdRegistrationService } from "../../src/services/fd-registration.service";
-import { RpkmRegistrationService } from "../../src/services/rpkm-registration.service";
+import { FirstDateService } from "../../src/services/firstdate.service";
+import { RpkmService } from "../../src/services/rpkm.service";
 
 let client: PGlite;
 let db: PgliteDatabase<typeof schema>;
@@ -70,7 +70,7 @@ describe("Production Flow Integration Tests", () => {
 
   it("1. student reg (fd) -> me (fd, regis: true)", async () => {
     // Student registers for FirstDate
-    const regResult = await FdRegistrationService.registerFd(
+    const regResult = await FirstDateService.registerFd(
       authUser(),
       validInput({ nickname: "One", pnoSgcuAwareness: "instagram" }),
       injected()
@@ -78,7 +78,7 @@ describe("Production Flow Integration Tests", () => {
     expect(regResult.userId).toMatch(/^[0-9a-f-]{36}$/);
 
     // Call getMe for FirstDate
-    const me = await FdRegistrationService.getProfile(authUser(), injected());
+    const me = await FirstDateService.getProfile(authUser(), injected());
     expect(me.user.id).toBe(regResult.userId);
     expect(me.user.nickname).toBe("One");
     expect(me.user.pnoSgcuAwareness).toBe("instagram");
@@ -100,14 +100,14 @@ describe("Production Flow Integration Tests", () => {
 
   it("2. student reg (fd) -> me (rpkm, have prefill from fd, regis: false)", async () => {
     // Student registers for FirstDate
-    await FdRegistrationService.registerFd(
+    await FirstDateService.registerFd(
       authUser(),
       validInput({ nickname: "PrefillName", phone: "0812345678" }),
       injected()
     );
 
     // Call getMe for RPKM
-    const me = await RpkmRegistrationService.getProfile(authUser(), injected());
+    const me = await RpkmService.getProfile(authUser(), injected());
     // user profile fields should prefill from students table
     expect(me.user.id).not.toBeNull();
     expect(me.user.nickname).toBe("PrefillName");
@@ -120,14 +120,14 @@ describe("Production Flow Integration Tests", () => {
 
   it("3. student reg (rpkm) -> me (rpkm, regis: true)", async () => {
     // Student registers for RPKM
-    const regResult = await RpkmRegistrationService.registerRpkm(
+    const regResult = await RpkmService.registerRpkm(
       authUser(),
       validInput({ nickname: "RpkmOnly" }),
       injected()
     );
 
     // Call getMe for RPKM
-    const me = await RpkmRegistrationService.getProfile(authUser(), injected());
+    const me = await RpkmService.getProfile(authUser(), injected());
     expect(me.user.id).toBe(regResult.userId);
     expect(me.user.nickname).toBe("RpkmOnly");
     expect(me.registration).not.toBeNull();
@@ -150,19 +150,19 @@ describe("Production Flow Integration Tests", () => {
     const user = authUser();
 
     // 1. Register FD
-    const fdReg = await FdRegistrationService.registerFd(
+    const fdReg = await FirstDateService.registerFd(
       user,
       validInput({ nickname: "SharedProfile" }),
       injected()
     );
 
     // 2. me (FD)
-    const fdMe = await FdRegistrationService.getProfile(user, injected());
+    const fdMe = await FirstDateService.getProfile(user, injected());
     expect(fdMe.user.id).toBe(fdReg.userId);
     expect(fdMe.registration).not.toBeNull();
 
     // 3. Register RPKM
-    const rpkmReg = await RpkmRegistrationService.registerRpkm(
+    const rpkmReg = await RpkmService.registerRpkm(
       user,
       validInput({ nickname: "SharedProfile" }),
       injected()
@@ -170,7 +170,7 @@ describe("Production Flow Integration Tests", () => {
     expect(rpkmReg.userId).toBe(fdReg.userId); // should share the same student record
 
     // 4. me (RPKM)
-    const rpkmMe = await RpkmRegistrationService.getProfile(user, injected());
+    const rpkmMe = await RpkmService.getProfile(user, injected());
     expect(rpkmMe.user.id).toBe(fdReg.userId);
     expect(rpkmMe.registration).not.toBeNull();
     expect(rpkmMe.group).not.toBeNull();
@@ -193,24 +193,24 @@ describe("Production Flow Integration Tests", () => {
     });
 
     // 1. staff calls me (FD & RPKM) -> returns pre-seeded profile details
-    const fdMe = await FdRegistrationService.getProfile(staffUser, injected());
+    const fdMe = await FirstDateService.getProfile(staffUser, injected());
     expect(fdMe.user.id).not.toBeNull();
     expect(fdMe.user.firstName).toBe("Staff");
     expect(fdMe.registration).toBeNull();
 
-    const rpkmMe = await RpkmRegistrationService.getProfile(staffUser, injected());
+    const rpkmMe = await RpkmService.getProfile(staffUser, injected());
     expect(rpkmMe.user.id).not.toBeNull();
     expect(rpkmMe.user.firstName).toBe("Staff");
     expect(rpkmMe.registration).toBeNull();
 
     // 2. staff tries to register FD -> rejected
     await expect(
-      FdRegistrationService.registerFd(staffUser, validInput(), injected())
+      FirstDateService.registerFd(staffUser, validInput(), injected())
     ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
 
     // 3. staff tries to register RPKM -> rejected
     await expect(
-      RpkmRegistrationService.registerRpkm(staffUser, validInput(), injected())
+      RpkmService.registerRpkm(staffUser, validInput(), injected())
     ).rejects.toMatchObject({ code: "NOT_FRESHMEN" });
   });
 
@@ -218,14 +218,14 @@ describe("Production Flow Integration Tests", () => {
 
   it("6. student reg (rpkm) -> me (fd, have prefill from rpkm, regis: false)", async () => {
     // Student registers for RPKM
-    await RpkmRegistrationService.registerRpkm(
+    await RpkmService.registerRpkm(
       authUser(),
       validInput({ nickname: "RpkmPrefill", phone: "0999999999" }),
       injected()
     );
 
     // Call getMe for FirstDate
-    const me = await FdRegistrationService.getProfile(authUser(), injected());
+    const me = await FirstDateService.getProfile(authUser(), injected());
     expect(me.user.id).not.toBeNull();
     expect(me.user.nickname).toBe("RpkmPrefill");
     expect(me.user.phone).toBe("0999999999");
@@ -236,13 +236,13 @@ describe("Production Flow Integration Tests", () => {
   it("7. Never-registered student -> me (fd and rpkm, regis: false, id: null)", async () => {
     const user = authUser();
 
-    const fdMe = await FdRegistrationService.getProfile(user, injected());
+    const fdMe = await FirstDateService.getProfile(user, injected());
     expect(fdMe.user.id).toBeNull();
     expect(fdMe.user.studentId).toBe("6912345678");
     expect(fdMe.registration).toBeNull();
     expect(fdMe.travelLegs).toEqual([]);
 
-    const rpkmMe = await RpkmRegistrationService.getProfile(user, injected());
+    const rpkmMe = await RpkmService.getProfile(user, injected());
     expect(rpkmMe.user.id).toBeNull();
     expect(rpkmMe.user.studentId).toBe("6912345678");
     expect(rpkmMe.registration).toBeNull();
@@ -253,28 +253,28 @@ describe("Production Flow Integration Tests", () => {
     const user = authUser();
 
     // Register FirstDate first
-    await FdRegistrationService.registerFd(
+    await FirstDateService.registerFd(
       user,
       validInput({ nickname: "OriginalNick", phone: "0111111111" }),
       injected()
     );
 
     // Register RPKM with updated nickname and phone
-    await RpkmRegistrationService.registerRpkm(
+    await RpkmService.registerRpkm(
       user,
       validInput({ nickname: "UpdatedNick", phone: "0222222222" }),
       injected()
     );
 
     // Check `/me` for FirstDate — user details updated, but registration remains correct
-    const fdMe = await FdRegistrationService.getProfile(user, injected());
+    const fdMe = await FirstDateService.getProfile(user, injected());
     expect(fdMe.user.nickname).toBe("UpdatedNick");
     expect(fdMe.user.phone).toBe("0222222222");
     expect(fdMe.registration).not.toBeNull();
     expect(fdMe.registration?.pdpaConsent).toBe(true);
 
     // Check `/me` for RPKM — details are also updated
-    const rpkmMe = await RpkmRegistrationService.getProfile(user, injected());
+    const rpkmMe = await RpkmService.getProfile(user, injected());
     expect(rpkmMe.user.nickname).toBe("UpdatedNick");
     expect(rpkmMe.user.phone).toBe("0222222222");
     expect(rpkmMe.registration).not.toBeNull();
@@ -285,7 +285,7 @@ describe("Production Flow Integration Tests", () => {
     const user = authUser();
 
     // 1. Unregistered -> returns registered: false
-    const fdMeUnregistered = await FdRegistrationService.getMe(user, injected());
+    const fdMeUnregistered = await FirstDateService.getMe(user, injected());
     expect(fdMeUnregistered).toEqual({
       id: null,
       studentId: "6912345678",
@@ -296,10 +296,10 @@ describe("Production Flow Integration Tests", () => {
     });
 
     // 2. Register FD
-    const regResult = await FdRegistrationService.registerFd(user, validInput(), injected());
+    const regResult = await FirstDateService.registerFd(user, validInput(), injected());
 
     // 3. Registered -> returns registered: true
-    const fdMeRegistered = await FdRegistrationService.getMe(user, injected());
+    const fdMeRegistered = await FirstDateService.getMe(user, injected());
     expect(fdMeRegistered).toEqual({
       id: regResult.userId,
       studentId: "6912345678",

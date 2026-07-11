@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { Database } from "@src/db";
-import { entries, students, type NewEntry } from "@src/db/schema";
+import { entries, registrations, students, type NewEntry } from "@src/db/schema";
 import type { AppErrorCode } from "@src/utils";
 
 /**
@@ -9,12 +9,24 @@ import type { AppErrorCode } from "@src/utils";
  */
 
 export class CheckinError extends Error {
-  constructor(public code: AppErrorCode) {
+  constructor(
+    public code: AppErrorCode,
+    public context?: Record<string, unknown>
+  ) {
     super(code);
   }
 }
 
 type CheckinProject = "rpkm" | "freshmennight" | "firstdate";
+
+const STAFF_GATE: Record<
+  CheckinProject,
+  { registrationsProject: "firstdate" | "rpkm"; staffRole: "firstdate" | "rpkm" | "freshmennight" }
+> = {
+  firstdate: { registrationsProject: "firstdate", staffRole: "firstdate" },
+  rpkm: { registrationsProject: "rpkm", staffRole: "rpkm" },
+  freshmennight: { registrationsProject: "rpkm", staffRole: "freshmennight" }
+};
 
 export async function checkinStudent(
   params: {
@@ -32,20 +44,39 @@ export async function checkinStudent(
 
   const [staff] = await db.select().from(students).where(eq(students.studentId, staffCunetId));
   if (!staff || staff.role !== "staff") throw new CheckinError("FORBIDDEN_NOT_STAFF");
+
+  const gate = STAFF_GATE[project];
+  const [staffReg] = await db
+    .select()
+    .from(registrations)
+    .where(
+      and(
+        eq(registrations.studentId, staff.id),
+        eq(registrations.project, gate.registrationsProject)
+      )
+    );
+  if (!staffReg || staffReg.staffRole !== gate.staffRole)
+    throw new CheckinError("FORBIDDEN_NOT_STAFF");
+
   const newEntry: NewEntry = { project, studentId: student.id, scannedBy: staff.id };
 
-  try {
-    const [inserted] = await db.insert(entries).values(newEntry).returning();
-    return inserted;
-  } catch (err) {
-    const cause =
-      err && typeof err === "object" && "cause" in err
-        ? (err as { cause: unknown }).cause
-        : undefined;
+  const [inserted] = await db
+    .insert(entries)
+    .values(newEntry)
+    .onConflictDoNothing({ target: [entries.studentId, entries.project] })
+    .returning();
 
-    if (cause && typeof cause === "object" && "code" in cause && cause.code === "23505") {
-      throw new CheckinError("ALREADY_CHECKED_IN");
-    }
-    throw err;
+  if (!inserted) {
+    const [existing] = await db
+      .select()
+      .from(entries)
+      .where(and(eq(entries.studentId, student.id), eq(entries.project, project)));
+
+    throw new CheckinError("ALREADY_CHECKED_IN", {
+      scannedAt: existing.scannedAt,
+      scannedBy: existing.scannedBy
+    });
   }
+
+  return inserted;
 }

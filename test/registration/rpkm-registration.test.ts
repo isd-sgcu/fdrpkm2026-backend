@@ -7,9 +7,9 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import type { Database } from "../../src/db";
 import * as schema from "../../src/db/schema";
 import { generateJoinCode } from "../../src/utils";
-import { RpkmRegistrationService } from "../../src/services/rpkm-registration.service";
+import { RpkmService } from "../../src/services/rpkm.service";
 
-const { registerRpkm, getMe, getProfile } = RpkmRegistrationService;
+const { registerRpkm, getMe, getProfile } = RpkmService;
 
 // Real Postgres (pglite, in-memory WASM) with the generated migrations applied,
 // so these exercise the actual constraints + transactions. The service takes an
@@ -416,11 +416,7 @@ describe("updateProfile (RPKM)", () => {
       ]
     });
 
-    const profile = await RpkmRegistrationService.updateProfile(
-      authUser(),
-      updatePayload,
-      injected()
-    );
+    const profile = await RpkmService.updateProfile(authUser(), updatePayload, injected());
     expect(profile.user.nickname).toBe("NewRpkmNick");
     expect(profile.user.faculty).toBe("Science");
     expect(profile.user.allergies).toBe("peanuts");
@@ -439,11 +435,7 @@ describe("updateProfile (RPKM)", () => {
       nickname: "PartialNick"
     };
 
-    const profile = await RpkmRegistrationService.updateProfile(
-      authUser(),
-      partialPayload,
-      injected()
-    );
+    const profile = await RpkmService.updateProfile(authUser(), partialPayload, injected());
     expect(profile.user.nickname).toBe("PartialNick");
     expect(profile.user.csoDistrict).toBe("Suthep"); // Unchanged
     expect(profile.travelLegs).toHaveLength(1); // Unchanged
@@ -451,7 +443,7 @@ describe("updateProfile (RPKM)", () => {
 
   it("throws NOT_FOUND if the user is unregistered", async () => {
     await expect(
-      RpkmRegistrationService.updateProfile(authUser(), validInput(), injected())
+      RpkmService.updateProfile(authUser(), validInput(), injected())
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
