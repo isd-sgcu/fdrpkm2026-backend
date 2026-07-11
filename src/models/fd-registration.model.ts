@@ -31,6 +31,7 @@ const meResult = t.Object({
   studentId: t.String(),
   firstName: t.String(),
   lastName: t.String(),
+  faculty: t.Nullable(t.String()),
   role: t.String(),
   registered: t.Boolean()
 });
