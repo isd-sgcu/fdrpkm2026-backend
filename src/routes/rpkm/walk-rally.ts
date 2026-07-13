@@ -72,4 +72,44 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
         404: tErrorResponse("NOT_FOUND")
       }
     }
+  )
+  .post(
+    "/registrations",
+    async ({ studentId, status, body }) => {
+      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
+
+      try {
+        return successResponse(await WalkRallyService.registerForActivity(studentId, body));
+      } catch (err) {
+        if (err instanceof WalkRallyService.WalkRallyServiceError) {
+          switch (err.code) {
+            case "REGISTRATION_CLOSED":
+              return status(403, errorResponse("REGISTRATION_CLOSED"));
+            case "INVALID_ACTIVITY":
+              return status(404, errorResponse("INVALID_ACTIVITY"));
+            case "ACTIVITY_ALREADY_REGISTERED":
+              return status(409, errorResponse("ACTIVITY_ALREADY_REGISTERED"));
+            case "ROUND_CONFLICT":
+              return status(409, errorResponse("ROUND_CONFLICT"));
+            default:
+              return status(404, errorResponse("NOT_FOUND"));
+          }
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      body: "WalkRally.RegisterActivityBody",
+      response: {
+        200: tSuccessResponse(WalkRallyModel.models.registerActivityResponse.Schema()),
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("REGISTRATION_CLOSED")]),
+        404: t.Union([tErrorResponse("INVALID_ACTIVITY"), tErrorResponse("NOT_FOUND")]),
+        409: t.Union([
+          tErrorResponse("ACTIVITY_ALREADY_REGISTERED"),
+          tErrorResponse("ROUND_CONFLICT")
+        ])
+      }
+    }
   );

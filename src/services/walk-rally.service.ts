@@ -8,6 +8,7 @@ import {
   walkRallyRegistrations
 } from "@src/db/schema";
 import type { AppErrorCode } from "@src/utils";
+import { isEventActive } from "@src/utils/flags";
 import { WALK_RALLY } from "@src/constants";
 
 // Constant
@@ -203,9 +204,80 @@ const getMe = async (
   return { points: pointsRow.points, registrations };
 };
 
+/**
+ * @name registerForActivity
+ * @api {POST} /walkrally/registrations
+ * @desc Registers the current student into round of activity.
+ * ---
+ * @param studentId CUNET id (from authMiddleware)
+ * @param input `code` (walk_rally_activities.code) and `round` (1-6)
+ * @throws {WalkRallyServiceError} REGISTRATION_CLOSED if outside the
+ *   regOpen/regClose window, NOT_FOUND if the student can't be resolved,
+ *   INVALID_ACTIVITY, ROUND_CONFLICT, ACTIVITY_ALREADY_REGISTERED
+ */
+type RegisterInput = { code: string; round: number };
+
+const registerForActivity = async (
+  studentId: string,
+  input: RegisterInput,
+  deps: WalkRallyDeps = {}
+): Promise<{ code: string; round: number }> => {
+  if (!isEventActive("rpkm_walkrally_registration"))
+    throw new WalkRallyServiceError("REGISTRATION_CLOSED");
+
+  const database = deps.db ?? defaultDb;
+  const student = await resolveCurrentStudent(studentId, deps);
+
+  const [activity] = await database
+    .select()
+    .from(walkRallyActivities)
+    .where(eq(walkRallyActivities.code, input.code));
+  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+
+  const targetSlot = WALK_RALLY.rounds[scheduleFor(activity.code)].find(
+    (s) => s.round === input.round
+  )!;
+  const targetStart = toMinutes(targetSlot.start);
+  const targetEnd = toMinutes(targetSlot.end);
+
+  return database.transaction(async (tx) => {
+    await tx.select().from(students).where(eq(students.id, student.id)).for("update");
+
+    const myRegistrations = await tx
+      .select({
+        round: walkRallyRegistrations.round,
+        activityCode: walkRallyActivities.code
+      })
+      .from(walkRallyRegistrations)
+      .innerJoin(walkRallyActivities, eq(walkRallyRegistrations.activityId, walkRallyActivities.id))
+      .where(eq(walkRallyRegistrations.studentId, student.id));
+
+    // Check overlap time
+    const conflict = myRegistrations.some((r) => {
+      if (r.round === input.round) return true;
+      const slot = WALK_RALLY.rounds[scheduleFor(r.activityCode)].find((s) => s.round === r.round)!;
+      return overlaps(targetStart, targetEnd, toMinutes(slot.start), toMinutes(slot.end));
+    });
+    if (conflict) throw new WalkRallyServiceError("ROUND_CONFLICT");
+
+    // Create registration
+    const [inserted] = await tx
+      .insert(walkRallyRegistrations)
+      .values({ studentId: student.id, activityId: activity.id, round: input.round })
+      .onConflictDoNothing({
+        target: [walkRallyRegistrations.studentId, walkRallyRegistrations.activityId]
+      })
+      .returning();
+    if (!inserted) throw new WalkRallyServiceError("ACTIVITY_ALREADY_REGISTERED");
+
+    return { code: activity.code, round: inserted.round };
+  });
+};
+
 // Namespace object — routes call `WalkRallyService.<fn>(...)` instead of
 export const WalkRallyService = {
   WalkRallyServiceError,
   getActivityRounds,
-  getMe
+  getMe,
+  registerForActivity
 };

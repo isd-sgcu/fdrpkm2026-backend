@@ -54,5 +54,13 @@ export const WalkRallyModel = new Elysia().model({
       description: "Count of the student's walk_rally_attendances rows"
     }),
     registrations: t.Array(myRegistration)
+  }),
+  registerActivityBody: t.Object({
+    code: t.String({ minLength: 1, title: "Activity Code" }),
+    round: t.Integer({ minimum: 1, maximum: 6, title: "Round" })
+  }),
+  registerActivityResponse: t.Object({
+    code: t.String({ title: "Activity Code" }),
+    round: t.Integer({ title: "Round" })
   })
 });

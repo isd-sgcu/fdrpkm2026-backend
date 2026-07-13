@@ -23,6 +23,10 @@ export const EventTime = {
   rpkm_csr: {
     start: new Date("2026-07-20T00:00:00+07:00"),
     end: new Date("2026-08-07T23:59:59+07:00")
+  },
+  rpkm_walkrally_registration: {
+    start: new Date("2026-07-22T00:00:00+07:00"),
+    end: new Date("2026-07-29T23:59:59+07:00")
   }
   // Other events can be added here as needed
 };
