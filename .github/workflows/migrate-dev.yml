@@ -1,19 +1,12 @@
 name: Migrate Database
 
 on:
-  workflow_dispatch:
-    inputs:
-      target:
-        description: "Database environment to migrate"
-        required: true
-        type: choice
-        options:
-          - dev
-          - prod
-      confirm:
-        description: "Type MIGRATE_DEV or MIGRATE_PROD"
-        required: true
-        type: string
+  push:
+    branches:
+      - feat/migration-dev-db-test
+    paths:
+      - ".github/workflows/migrate-dev.yml"
+      - "drizzle/**"
 
 # Keep base permissions minimal. The migration job grants id-token only for
 # Workload Identity Federation authentication.
@@ -21,12 +14,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: migrate-${{ inputs.target }}-db
+  group: migrate-dev-db
   cancel-in-progress: false
 
 jobs:
   migrate:
-    name: Apply ${{ inputs.target }} DB Migrations
+    name: Apply dev DB Migrations
     runs-on: ubuntu-latest
     # Use one migration environment. Only the selected database URL is exposed
     # to this job; dev and prod credentials remain separate secrets.
@@ -38,21 +31,27 @@ jobs:
       id-token: write
 
     env:
+      # Temporary feature-branch test: this workflow can only target dev.
+      TARGET: dev
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       CLOUD_SQL_INSTANCE_NAME: ${{ vars.CLOUD_SQL_INSTANCE_NAME }}
       CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
       CLOUD_SQL_BACKUP_RETENTION_DAYS: ${{ vars.CLOUD_SQL_BACKUP_RETENTION_DAYS || '7' }}
 
     steps:
-      - name: Validate manual confirmation
+      - name: Validate dev migration trigger
         run: |
-          EXPECTED="MIGRATE_${{ inputs.target }}"
-          EXPECTED="$(echo "$EXPECTED" | tr '[:lower:]' '[:upper:]')"
-
-          if [ "${{ inputs.confirm }}" != "$EXPECTED" ]; then
-            echo "::error::Confirmation failed. Expected: ${EXPECTED}"
+          if [ "${GITHUB_REF}" != "refs/heads/feat/migration-dev-db-test" ]; then
+            echo "::error::This temporary migration can run only from feat/migration-dev-db-test."
             exit 1
           fi
+
+          if [ "${TARGET}" != "dev" ]; then
+            echo "::error::This temporary push workflow allows only TARGET=dev."
+            exit 1
+          fi
+
+          echo "Temporary push-triggered migration target: ${TARGET}"
 
           if ! [[ "${CLOUD_SQL_BACKUP_RETENTION_DAYS}" =~ ^[1-9][0-9]*$ ]]; then
             echo "::error::CLOUD_SQL_BACKUP_RETENTION_DAYS must be a positive integer."
@@ -67,7 +66,6 @@ jobs:
           done
 
       - name: Select dev database configuration
-        if: inputs.target == 'dev'
         env:
           SELECTED_DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
         run: |
@@ -79,30 +77,19 @@ jobs:
           echo "::add-mask::${SELECTED_DATABASE_URL}"
           printf 'DATABASE_URL=%s\n' "${SELECTED_DATABASE_URL}" >> "$GITHUB_ENV"
 
-      - name: Select prod database configuration
-        if: inputs.target == 'prod'
-        env:
-          SELECTED_DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
-        run: |
-          if [ -z "${SELECTED_DATABASE_URL}" ]; then
-            echo "::error::DATABASE_URL_PROD is not configured in the migration-dev environment."
-            exit 1
-          fi
-
-          echo "::add-mask::${SELECTED_DATABASE_URL}"
-          printf 'DATABASE_URL=%s\n' "${SELECTED_DATABASE_URL}" >> "$GITHUB_ENV"
-
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Google Cloud CLI
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
@@ -119,7 +106,7 @@ jobs:
       - name: Create Cloud SQL backup before migration
         id: backup
         run: |
-          BACKUP_DESCRIPTION="github-actions-${{ inputs.target }}-migration-${GITHUB_SHA}-${GITHUB_RUN_ID}"
+          BACKUP_DESCRIPTION="github-actions-${TARGET}-migration-${GITHUB_SHA}-${GITHUB_RUN_ID}"
 
           gcloud sql backups create \
             --project "${GCP_PROJECT_ID}" \
@@ -187,7 +174,7 @@ jobs:
         env:
           CURRENT_BACKUP_ID: ${{ steps.backup.outputs.backup_id }}
         run: |
-          BACKUP_PREFIX="github-actions-${{ inputs.target }}-migration-"
+          BACKUP_PREFIX="github-actions-${TARGET}-migration-"
           CUTOFF_EPOCH="$(date -u -d "${CLOUD_SQL_BACKUP_RETENTION_DAYS} days ago" +%s)"
 
           gcloud sql backups list \
