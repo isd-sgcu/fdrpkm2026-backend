@@ -32,7 +32,9 @@ export const auth = betterAuth({
     allowedHosts: [
       "fd-api.rpkm2026.com",
       "rpkm-api.rpkm2026.com",
-      ...(env.NODE_ENV !== "production" ? ["localhost:*"] : [])
+      ...(env.NODE_ENV !== "production"
+        ? ["staging-fd-api.rpkm2026.com", "staging-rpkm-api.rpkm2026.com", "localhost:*"]
+        : [])
     ],
     protocol: env.NODE_ENV !== "production" ? "http" : "https",
     // Direct auth.api calls with no request context (e.g. generateOpenAPISchema
@@ -42,8 +44,8 @@ export const auth = betterAuth({
     fallback:
       env.BETTER_AUTH_URL || (env.NODE_ENV !== "production" ? "http://localhost:3000" : undefined)
   },
-  // Public endpoint is https://<fd|rpkm>-api.rpkm2026.com/v1/auth/* — keep in
-  // sync with apiRoutes' "/v1" prefix in src/routes/index.ts.
+  // Public endpoint is https://[staging-]<fd|rpkm>-api.rpkm2026.com/v1/auth/*
+  // — keep in sync with apiRoutes' "/v1" prefix in src/routes/index.ts.
   basePath: "/v1/auth",
   // Both frontends call this shared backend cross-origin — required for
   // cookie-mode sessions to pass Better Auth's origin/CSRF check. Dev/preview
