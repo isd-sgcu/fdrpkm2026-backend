@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+  workflow_dispatch:
 
 # Keep default permissions minimal. The deploy job grants id-token only where
 # Workload Identity Federation needs it.
