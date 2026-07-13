@@ -67,7 +67,7 @@ jobs:
       GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY }}
       CLOUD_RUN_SERVICE_DEV: ${{ vars.CLOUD_RUN_SERVICE_DEV }}
       HEALTH_PATH: ${{ vars.CLOUD_RUN_HEALTH_PATH || '/v1/health' }}
-      ALLOW_DEV_DEPLOY_HEALTH_FAILURE: ${{ 'ture' || 'false' }}
+      ALLOW_DEV_DEPLOY_HEALTH_FAILURE: ${{ vars.ALLOW_DEV_DEPLOY_HEALTH_FAILURE || 'false' }}
 
     permissions:
       contents: read
@@ -169,6 +169,7 @@ jobs:
               --platform managed
               --port "${CONTAINER_PORT}"
               --tag "candidate"
+              --allow-unauthenticated
               --update-env-vars "NODE_ENV=development"
               --update-env-vars "BETTER_AUTH_URL=${BETTER_AUTH_URL}"
               --update-env-vars "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
@@ -230,14 +231,12 @@ jobs:
 
       - name: Health check candidate revision before traffic
         env:
-          SERVICE_URL: ${{ steps.candidate.outputs.service_url }}
           CANDIDATE_URL: ${{ steps.candidate.outputs.candidate_url }}
         run: |
           HEALTH_URL="${CANDIDATE_URL%/}${HEALTH_PATH}"
-          ID_TOKEN="$(gcloud auth print-identity-token --audiences="${SERVICE_URL}")"
 
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            STATUS_CODE="$(curl --silent --show-error --header "Authorization: Bearer ${ID_TOKEN}" --output /tmp/candidate-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
+            STATUS_CODE="$(curl --silent --show-error --output /tmp/candidate-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
 
             if [ "$STATUS_CODE" = "200" ]; then
               echo "Candidate health check passed: ${HEALTH_URL}"
@@ -276,10 +275,9 @@ jobs:
           SERVICE_URL: ${{ steps.candidate.outputs.service_url }}
         run: |
           HEALTH_URL="${SERVICE_URL%/}${HEALTH_PATH}"
-          ID_TOKEN="$(gcloud auth print-identity-token --audiences="${SERVICE_URL}")"
 
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            STATUS_CODE="$(curl --silent --show-error --header "Authorization: Bearer ${ID_TOKEN}" --output /tmp/promoted-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
+            STATUS_CODE="$(curl --silent --show-error --output /tmp/promoted-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
 
             if [ "$STATUS_CODE" = "200" ]; then
               echo "Promoted service health check passed: ${HEALTH_URL}"

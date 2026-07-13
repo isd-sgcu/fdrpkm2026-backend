@@ -51,10 +51,11 @@ GCP_REGION-docker.pkg.dev/GCP_PROJECT_ID/GAR_REPOSITORY/fdrpkm2026-backend:<tag>
 ```
 
 - The workflow deploys the commit-SHA image to `CLOUD_RUN_SERVICE_DEV`.
+- The dev Cloud Run service is deployed with `--allow-unauthenticated`, so it is publicly invokable for temporary smoke testing.
 - On the first deploy, Cloud Run creates the service with live traffic because `--no-traffic` is not supported when creating a new service.
 - On later deploys, the workflow deploys the candidate revision without traffic, health-checks it, then promotes it.
 - Runtime app config is injected into Cloud Run with `gcloud run deploy --update-env-vars`.
-- The deployed service is health-checked at `CLOUD_RUN_HEALTH_PATH` with a Google identity token, so private Cloud Run services can be checked by the deploy service account.
+- The deployed service is health-checked at `CLOUD_RUN_HEALTH_PATH` with plain `curl`.
 
 ## Required Health Path
 
