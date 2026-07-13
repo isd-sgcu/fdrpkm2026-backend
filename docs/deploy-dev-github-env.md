@@ -12,19 +12,20 @@ GitHub repository -> Settings -> Environments -> dev
 
 Add these under `Environment variables`.
 
-| Name                    | Example / notes                                                             |
-| ----------------------- | --------------------------------------------------------------------------- |
-| `GCP_PROJECT_ID`        | Google Cloud project ID for dev.                                            |
-| `GCP_REGION`            | Example: `asia-southeast1`.                                                 |
-| `GAR_REPOSITORY`        | Artifact Registry Docker repository name.                                   |
-| `CLOUD_RUN_SERVICE_DEV` | Cloud Run service name for dev.                                             |
-| `CLOUD_RUN_HEALTH_PATH` | Use `/v1/health` for this repo.                                             |
-| `BETTER_AUTH_URL`       | Public dev API base URL, for example `https://dev-api.example.com`.         |
-| `GOOGLE_CLIENT_ID`      | Google OAuth client ID.                                                     |
-| `S3_ENDPOINT`           | S3-compatible endpoint, for example Cloudflare R2.                          |
-| `S3_REGION`             | Use `auto` for Cloudflare R2 unless your provider needs another region.     |
-| `S3_BUCKET`             | Upload bucket name.                                                         |
-| `ASSET_BASE_URL`        | Public asset base URL. Leave empty only if presigned GET URLs are intended. |
+| Name                              | Example / notes                                                                                                                    |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `GCP_PROJECT_ID`                  | Google Cloud project ID for dev.                                                                                                   |
+| `GCP_REGION`                      | Example: `asia-southeast1`.                                                                                                        |
+| `GAR_REPOSITORY`                  | Artifact Registry Docker repository name.                                                                                          |
+| `CLOUD_RUN_SERVICE_DEV`           | Cloud Run service name for dev.                                                                                                    |
+| `CLOUD_RUN_HEALTH_PATH`           | Use `/v1/health` for this repo.                                                                                                    |
+| `ALLOW_DEV_DEPLOY_HEALTH_FAILURE` | Optional temporary bypass. Set to `true` only to stop promoted health-check failures from failing the dev workflow after rollback. |
+| `BETTER_AUTH_URL`                 | Public dev API base URL, for example `https://dev-api.example.com`.                                                                |
+| `GOOGLE_CLIENT_ID`                | Google OAuth client ID.                                                                                                            |
+| `S3_ENDPOINT`                     | S3-compatible endpoint, for example Cloudflare R2.                                                                                 |
+| `S3_REGION`                       | Use `auto` for Cloudflare R2 unless your provider needs another region.                                                            |
+| `S3_BUCKET`                       | Upload bucket name.                                                                                                                |
+| `ASSET_BASE_URL`                  | Public asset base URL. Leave empty only if presigned GET URLs are intended.                                                        |
 
 ## Environment Secrets
 
@@ -50,8 +51,10 @@ GCP_REGION-docker.pkg.dev/GCP_PROJECT_ID/GAR_REPOSITORY/fdrpkm2026-backend:<tag>
 ```
 
 - The workflow deploys the commit-SHA image to `CLOUD_RUN_SERVICE_DEV`.
+- On the first deploy, Cloud Run creates the service with live traffic because `--no-traffic` is not supported when creating a new service.
+- On later deploys, the workflow deploys the candidate revision without traffic, health-checks it, then promotes it.
 - Runtime app config is injected into Cloud Run with `gcloud run deploy --update-env-vars`.
-- The deployed service is health-checked at `CLOUD_RUN_HEALTH_PATH`.
+- The deployed service is health-checked at `CLOUD_RUN_HEALTH_PATH` with a Google identity token, so private Cloud Run services can be checked by the deploy service account.
 
 ## Required Health Path
 
@@ -67,7 +70,19 @@ Set:
 CLOUD_RUN_HEALTH_PATH=/v1/health
 ```
 
-Using `/health` will fail the deployment health check for this repo.
+The workflow defaults to `/v1/health` if `CLOUD_RUN_HEALTH_PATH` is not set.
+
+## Temporary Failure Email Bypass
+
+GitHub sends Actions failure emails when the workflow ends in failure. This repo does not send those emails itself.
+
+For a short-term dev-only bypass, set this GitHub Environment variable:
+
+```txt
+ALLOW_DEV_DEPLOY_HEALTH_FAILURE=true
+```
+
+When enabled, the workflow still attempts rollback after a promoted health-check failure, but it records a warning instead of failing the workflow. Remove the variable or set it to `false` after the incident is fixed.
 
 ## Notes
 

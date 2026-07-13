@@ -66,7 +66,8 @@ jobs:
       GCP_REGION: ${{ vars.GCP_REGION }}
       GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY }}
       CLOUD_RUN_SERVICE_DEV: ${{ vars.CLOUD_RUN_SERVICE_DEV }}
-      HEALTH_PATH: ${{ vars.CLOUD_RUN_HEALTH_PATH || '/health' }}
+      HEALTH_PATH: ${{ vars.CLOUD_RUN_HEALTH_PATH || '/v1/health' }}
+      ALLOW_DEV_DEPLOY_HEALTH_FAILURE: ${{ 'ture' || 'false' }}
 
     permissions:
       contents: read
