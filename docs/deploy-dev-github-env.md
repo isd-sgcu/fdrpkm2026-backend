@@ -76,13 +76,18 @@ The workflow defaults to `/v1/health` if `CLOUD_RUN_HEALTH_PATH` is not set.
 
 GitHub sends Actions failure emails when the workflow ends in failure. This repo does not send those emails itself.
 
-For a short-term dev-only bypass, set this GitHub Environment variable:
+If the workflow must still show as failed, do not use `continue-on-error`. Temporarily stop the email at the GitHub notification/watch level instead:
+
+- Repository page -> Watch button -> Custom -> uncheck Actions, or choose Ignore for the incident window.
+- GitHub profile -> Settings -> Notifications -> Actions -> disable or reduce email notifications.
+
+For only promoted health-check failures after rollback, this GitHub Environment variable can stop that specific final failure path:
 
 ```txt
 ALLOW_DEV_DEPLOY_HEALTH_FAILURE=true
 ```
 
-When enabled, the workflow still attempts rollback after a promoted health-check failure, but it records a warning instead of failing the workflow. Remove the variable or set it to `false` after the incident is fixed.
+That variable does not suppress emails for earlier failures such as build, Docker push, authentication, or `gcloud run deploy`. Remove the variable or set it to `false` after the incident is fixed.
 
 ## Notes
 

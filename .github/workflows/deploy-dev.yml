@@ -102,6 +102,19 @@ jobs:
       - name: Capture current Cloud Run traffic for rollback
         id: previous-traffic
         run: |
+          if ! gcloud run services describe "${CLOUD_RUN_SERVICE_DEV}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            >/dev/null 2>&1; then
+            echo "::warning::Cloud Run service does not exist yet. First deploy will create it with live traffic because --no-traffic is not supported when creating a service."
+            echo "service_exists=false" >> "$GITHUB_OUTPUT"
+            echo "traffic=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "service_exists=true" >> "$GITHUB_OUTPUT"
+
           TRAFFIC="$(gcloud run services describe "${CLOUD_RUN_SERVICE_DEV}" \
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
@@ -132,42 +145,64 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy SHA image to Cloud Run without traffic
-        # env:
-        #   BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
-        #   GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
-        #   S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
-        #   S3_REGION: ${{ vars.S3_REGION || 'auto' }}
-        #   S3_BUCKET: ${{ vars.S3_BUCKET }}
-        #   ASSET_BASE_URL: ${{ vars.ASSET_BASE_URL }}
-        #   DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        #   BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-        #   GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-        #   S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-        #   S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+      - name: Deploy SHA image to Cloud Run
+        env:
+          BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_REGION: ${{ vars.S3_REGION || 'auto' }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          ASSET_BASE_URL: ${{ vars.ASSET_BASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
         run: |
-          gcloud run deploy "${CLOUD_RUN_SERVICE_DEV}" \
-            --project "${GCP_PROJECT_ID}" \
-            --region "${GCP_REGION}" \
-            --image "${{ steps.image.outputs.sha }}" \
-            --platform managed \
-            --port "${CONTAINER_PORT}" \
-            --tag "candidate" \
-            --no-traffic \
-            --update-env-vars "NODE_ENV=development" \
-            --update-env-vars "BETTER_AUTH_URL=${BETTER_AUTH_URL}" \
-            --update-env-vars "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}" \
-            --update-env-vars "S3_ENDPOINT=${S3_ENDPOINT}" \
-            --update-env-vars "S3_REGION=${S3_REGION}" \
-            --update-env-vars "S3_BUCKET=${S3_BUCKET}" \
-            --update-env-vars "ASSET_BASE_URL=${ASSET_BASE_URL}" \
-            --update-env-vars "DATABASE_URL=${DATABASE_URL}" \
-            --update-env-vars "BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}" \
-            --update-env-vars "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}" \
-            --update-env-vars "S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}" \
-            --update-env-vars "S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}" \
-            --quiet \
-            --timeout 300s
+          run_deploy() {
+            local use_no_traffic="$1"
+            local args=(
+              gcloud run deploy "${CLOUD_RUN_SERVICE_DEV}"
+              --project "${GCP_PROJECT_ID}"
+              --region "${GCP_REGION}"
+              --image "${{ steps.image.outputs.sha }}"
+              --platform managed
+              --port "${CONTAINER_PORT}"
+              --tag "candidate"
+              --update-env-vars "NODE_ENV=development"
+              --update-env-vars "BETTER_AUTH_URL=${BETTER_AUTH_URL}"
+              --update-env-vars "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
+              --update-env-vars "S3_ENDPOINT=${S3_ENDPOINT}"
+              --update-env-vars "S3_REGION=${S3_REGION}"
+              --update-env-vars "S3_BUCKET=${S3_BUCKET}"
+              --update-env-vars "ASSET_BASE_URL=${ASSET_BASE_URL}"
+              --update-env-vars "DATABASE_URL=${DATABASE_URL}"
+              --update-env-vars "BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}"
+              --update-env-vars "GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}"
+              --update-env-vars "S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}"
+              --update-env-vars "S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}"
+              --quiet
+              --timeout 300s
+            )
+
+            if [ "$use_no_traffic" = "true" ]; then
+              args+=(--no-traffic)
+            fi
+
+            "${args[@]}"
+          }
+
+          USE_NO_TRAFFIC="${{ steps.previous-traffic.outputs.service_exists }}"
+          DEPLOY_LOG="$(mktemp)"
+
+          if ! run_deploy "${USE_NO_TRAFFIC}" 2> >(tee "${DEPLOY_LOG}" >&2); then
+            if grep -Fq -- "--no-traffic not supported when creating a new service" "${DEPLOY_LOG}"; then
+              echo "::warning::Cloud Run treated this as a new service. Retrying deploy without --no-traffic."
+              run_deploy "false"
+            else
+              exit 1
+            fi
+          fi
 
       # The candidate tag gives us a revision-specific URL for pre-traffic health checks.
       - name: Get candidate revision and URLs
@@ -195,12 +230,14 @@ jobs:
 
       - name: Health check candidate revision before traffic
         env:
+          SERVICE_URL: ${{ steps.candidate.outputs.service_url }}
           CANDIDATE_URL: ${{ steps.candidate.outputs.candidate_url }}
         run: |
           HEALTH_URL="${CANDIDATE_URL%/}${HEALTH_PATH}"
+          ID_TOKEN="$(gcloud auth print-identity-token --audiences="${SERVICE_URL}")"
 
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            STATUS_CODE="$(curl --silent --show-error --output /tmp/candidate-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
+            STATUS_CODE="$(curl --silent --show-error --header "Authorization: Bearer ${ID_TOKEN}" --output /tmp/candidate-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
 
             if [ "$STATUS_CODE" = "200" ]; then
               echo "Candidate health check passed: ${HEALTH_URL}"
@@ -216,6 +253,7 @@ jobs:
           exit 1
 
       - name: Promote candidate revision to 100 percent traffic
+        if: steps.previous-traffic.outputs.service_exists == 'true'
         id: promote
         run: |
           gcloud run services update-traffic "${CLOUD_RUN_SERVICE_DEV}" \
@@ -238,9 +276,10 @@ jobs:
           SERVICE_URL: ${{ steps.candidate.outputs.service_url }}
         run: |
           HEALTH_URL="${SERVICE_URL%/}${HEALTH_PATH}"
+          ID_TOKEN="$(gcloud auth print-identity-token --audiences="${SERVICE_URL}")"
 
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            STATUS_CODE="$(curl --silent --show-error --output /tmp/promoted-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
+            STATUS_CODE="$(curl --silent --show-error --header "Authorization: Bearer ${ID_TOKEN}" --output /tmp/promoted-health.txt --write-out '%{http_code}' "$HEALTH_URL" || true)"
 
             if [ "$STATUS_CODE" = "200" ]; then
               echo "Promoted service health check passed: ${HEALTH_URL}"
@@ -268,10 +307,15 @@ jobs:
             --quiet
 
       - name: Fail workflow after rollback
-        if: steps.promoted-health.outcome == 'failure'
+        if: steps.promoted-health.outcome == 'failure' && env.ALLOW_DEV_DEPLOY_HEALTH_FAILURE != 'true'
         run: |
           echo "::error::Deployment failed health check. Rollback was attempted if previous traffic existed."
           exit 1
+
+      - name: Bypass dev deploy failure after rollback
+        if: steps.promoted-health.outcome == 'failure' && env.ALLOW_DEV_DEPLOY_HEALTH_FAILURE == 'true'
+        run: |
+          echo "::warning::Promoted health check failed and rollback was attempted, but ALLOW_DEV_DEPLOY_HEALTH_FAILURE=true so this dev workflow will not fail."
 
       # Only revisions that pass live traffic health get the stable tag.
       - name: Mark healthy revision as stable
