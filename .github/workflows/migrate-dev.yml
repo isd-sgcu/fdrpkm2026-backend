@@ -28,7 +28,9 @@ jobs:
   migrate:
     name: Apply ${{ inputs.target }} DB Migrations
     runs-on: ubuntu-latest
-    environment: migration-${{ inputs.target }}
+    # Use one migration environment. Only the selected database URL is exposed
+    # to this job; dev and prod credentials remain separate secrets.
+    environment: migration-dev
     timeout-minutes: 30
 
     permissions:
@@ -40,7 +42,6 @@ jobs:
       CLOUD_SQL_INSTANCE_NAME: ${{ vars.CLOUD_SQL_INSTANCE_NAME }}
       CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
       CLOUD_SQL_BACKUP_RETENTION_DAYS: ${{ vars.CLOUD_SQL_BACKUP_RETENTION_DAYS || '7' }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
       - name: Validate manual confirmation
@@ -57,6 +58,39 @@ jobs:
             echo "::error::CLOUD_SQL_BACKUP_RETENTION_DAYS must be a positive integer."
             exit 1
           fi
+
+          for name in GCP_PROJECT_ID CLOUD_SQL_INSTANCE_NAME CLOUD_SQL_CONNECTION_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required migration configuration is missing: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Select dev database configuration
+        if: inputs.target == 'dev'
+        env:
+          SELECTED_DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+        run: |
+          if [ -z "${SELECTED_DATABASE_URL}" ]; then
+            echo "::error::DATABASE_URL_DEV is not configured in the migration-dev environment."
+            exit 1
+          fi
+
+          echo "::add-mask::${SELECTED_DATABASE_URL}"
+          printf 'DATABASE_URL=%s\n' "${SELECTED_DATABASE_URL}" >> "$GITHUB_ENV"
+
+      - name: Select prod database configuration
+        if: inputs.target == 'prod'
+        env:
+          SELECTED_DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+        run: |
+          if [ -z "${SELECTED_DATABASE_URL}" ]; then
+            echo "::error::DATABASE_URL_PROD is not configured in the migration-dev environment."
+            exit 1
+          fi
+
+          echo "::add-mask::${SELECTED_DATABASE_URL}"
+          printf 'DATABASE_URL=%s\n' "${SELECTED_DATABASE_URL}" >> "$GITHUB_ENV"
 
       - name: Check out repository
         uses: actions/checkout@v4

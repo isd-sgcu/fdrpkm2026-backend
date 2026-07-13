@@ -1,37 +1,42 @@
 # Database Migration GitHub Environment Setup
 
-The `Migrate Database` workflow uses one GitHub Environment for each target:
+The `Migrate Database` workflow uses one GitHub Environment:
 
 ```txt
 migration-dev
-migration-prod
 ```
 
-Create them under:
+Create or open it under:
 
 ```txt
 GitHub repository -> Settings -> Environments
 ```
 
-Add required reviewers to `migration-prod` so a production migration cannot start
-without approval.
+Because both database targets use this environment, its protection rules apply to
+both dev and prod migrations. Keep the manual `MIGRATE_DEV` / `MIGRATE_PROD`
+confirmation enabled. If production later requires separate reviewers, restore
+separate `migration-dev` and `migration-prod` environments.
 
 ## Environment Variables
 
-| Name                              | Example / notes                                         |
-| --------------------------------- | ------------------------------------------------------- |
-| `GCP_PROJECT_ID`                  | Google Cloud project containing the Cloud SQL instance. |
-| `CLOUD_SQL_INSTANCE_NAME`         | Cloud SQL instance ID, not the database name.           |
-| `CLOUD_SQL_CONNECTION_NAME`       | Full value: `project:region:instance`.                  |
-| `CLOUD_SQL_BACKUP_RETENTION_DAYS` | Optional positive integer. Defaults to `7`.             |
+| Name                              | Example / notes                                                |
+| --------------------------------- | -------------------------------------------------------------- |
+| `GCP_PROJECT_ID`                  | Google Cloud project containing the shared Cloud SQL instance. |
+| `CLOUD_SQL_INSTANCE_NAME`         | Shared Cloud SQL instance ID, not either database name.        |
+| `CLOUD_SQL_CONNECTION_NAME`       | Shared value: `project:region:instance`.                       |
+| `CLOUD_SQL_BACKUP_RETENTION_DAYS` | Optional positive integer. Defaults to `7`.                    |
 
 ## Environment Secrets
 
-| Name                             | Example / notes                                                            |
-| -------------------------------- | -------------------------------------------------------------------------- |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Full Workload Identity provider resource name.                             |
-| `GCP_SERVICE_ACCOUNT`            | Migration service account email.                                           |
-| `DATABASE_URL`                   | `postgres://USER:PASSWORD@127.0.0.1:5432/DATABASE` for the workflow proxy. |
+| Name                             | Example / notes                                          |
+| -------------------------------- | -------------------------------------------------------- |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Full Workload Identity provider resource name.           |
+| `GCP_SERVICE_ACCOUNT`            | Migration service account email.                         |
+| `DATABASE_URL_DEV`               | `postgres://USER:PASSWORD@127.0.0.1:5432/DEV_DATABASE`.  |
+| `DATABASE_URL_PROD`              | `postgres://USER:PASSWORD@127.0.0.1:5432/PROD_DATABASE`. |
+
+The workflow selects exactly one database URL from the dispatch `target`. Both URLs
+use `127.0.0.1:5432` because the workflow connects through Cloud SQL Auth Proxy.
 
 ## Backup Retention
 
