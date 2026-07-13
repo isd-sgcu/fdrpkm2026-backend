@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import * as t from "drizzle-orm/pg-core";
 
-import { walkRallyKindEnum } from "./enums";
+import { attendanceSourceEnum, walkRallyKindEnum } from "./enums";
 import { id, timestamps } from "./helper";
 import { students } from "./identity.schema";
 
@@ -61,6 +61,7 @@ export const walkRallyAttendances = t.pgTable(
       .notNull()
       .references(() => students.id, { onDelete: "restrict" }),
     scannedAt: t.timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
+    source: attendanceSourceEnum("source").notNull(),
     ...timestamps
   },
   (table) => [

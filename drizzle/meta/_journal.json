@@ -57,6 +57,13 @@
       "when": 1783780472555,
       "tag": "0007_chubby_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783958742460,
+      "tag": "0008_slim_beast",
+      "breakpoints": true
     }
   ]
 }
