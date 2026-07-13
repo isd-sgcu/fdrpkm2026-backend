@@ -1,7 +1,12 @@
 import { eq, sql } from "drizzle-orm";
 
 import { db as defaultDb, type Database } from "@src/db";
-import { students, walkRallyActivities, walkRallyRegistrations } from "@src/db/schema";
+import {
+  students,
+  walkRallyActivities,
+  walkRallyAttendances,
+  walkRallyRegistrations
+} from "@src/db/schema";
 import type { AppErrorCode } from "@src/utils";
 import { WALK_RALLY } from "@src/constants";
 
@@ -133,8 +138,74 @@ const getActivityRounds = async (
   };
 };
 
+/**
+ * @name getMe
+ * @api {GET} /walkrally/me
+ * @desc The current student's walk rally points (attendance count) and
+ * their registrations, each annotated with: start/end, round, place, the registration's 1-based order within its (activity, round) slot.
+ * Registrations are ordered by upcoming activity — soonest start time first.
+ * ---
+ * @param studentId CUNET id (from authMiddleware)
+ * @throws {WalkRallyServiceError} NOT_FOUND if the student can't be resolved
+ */
+type MyRegistration = {
+  code: string;
+  round: number;
+  start: string;
+  end: string;
+  place: number;
+};
+
+const getMe = async (
+  studentId: string,
+  deps: WalkRallyDeps = {}
+): Promise<{ points: number; registrations: MyRegistration[] }> => {
+  const database = deps.db ?? defaultDb;
+  const student = await resolveCurrentStudent(studentId, deps);
+
+  const [pointsRow] = await database
+    .select({ points: sql<number>`count(*)`.mapWith(Number) })
+    .from(walkRallyAttendances)
+    .where(eq(walkRallyAttendances.studentId, student.id));
+
+  // Ranks every registration within its (activity, round) slot by signup order
+  const ranked = database.$with("ranked").as(
+    database
+      .select({
+        studentId: walkRallyRegistrations.studentId,
+        round: walkRallyRegistrations.round,
+        activityCode: walkRallyActivities.code,
+        place: sql<number>`row_number() over (
+          partition by ${walkRallyRegistrations.activityId}, ${walkRallyRegistrations.round}
+          order by ${walkRallyRegistrations.createdAt}, ${walkRallyRegistrations.id}
+        )`
+          .mapWith(Number)
+          .as("place")
+      })
+      .from(walkRallyRegistrations)
+      .innerJoin(walkRallyActivities, eq(walkRallyRegistrations.activityId, walkRallyActivities.id))
+  );
+
+  const rows = await database
+    .with(ranked)
+    .select({ code: ranked.activityCode, round: ranked.round, place: ranked.place })
+    .from(ranked)
+    .where(eq(ranked.studentId, student.id));
+
+  // Ranked by upcoming activity
+  const registrations: MyRegistration[] = rows
+    .map((r) => {
+      const slot = WALK_RALLY.rounds[scheduleFor(r.code)].find((s) => s.round === r.round)!;
+      return { code: r.code, round: r.round, start: slot.start, end: slot.end, place: r.place };
+    })
+    .sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+
+  return { points: pointsRow.points, registrations };
+};
+
 // Namespace object — routes call `WalkRallyService.<fn>(...)` instead of
 export const WalkRallyService = {
   WalkRallyServiceError,
-  getActivityRounds
+  getActivityRounds,
+  getMe
 };

@@ -48,4 +48,28 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
         404: t.Union([tErrorResponse("INVALID_ACTIVITY"), tErrorResponse("NOT_FOUND")])
       }
     }
+  )
+  .get(
+    "/me",
+    async ({ studentId, status }) => {
+      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
+
+      try {
+        return successResponse(await WalkRallyService.getMe(studentId));
+      } catch (err) {
+        if (err instanceof WalkRallyService.WalkRallyServiceError) {
+          return status(404, errorResponse("NOT_FOUND"));
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      response: {
+        200: tSuccessResponse(WalkRallyModel.models.getMeResponse.Schema()),
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("NOT_FRESHMEN"),
+        404: tErrorResponse("NOT_FOUND")
+      }
+    }
   );

@@ -23,6 +23,17 @@ const round = t.Object({
   )
 });
 
+const myRegistration = t.Object({
+  code: t.String({ title: "Activity Code" }),
+  round: t.Integer({ title: "Round" }),
+  start: t.String({ title: "Start Time", description: "HH:mm" }),
+  end: t.String({ title: "End Time", description: "HH:mm" }),
+  place: t.Integer({
+    title: "Place",
+    description: "1-based registration order within the (activity, round) slot"
+  })
+});
+
 export const WalkRallyModel = new Elysia().model({
   activity,
   registration,
@@ -36,5 +47,12 @@ export const WalkRallyModel = new Elysia().model({
       title: "Registered Round",
       description: "True if the student already holds a registration for this activity, any round."
     })
+  }),
+  getMeResponse: t.Object({
+    points: t.Integer({
+      title: "Points",
+      description: "Count of the student's walk_rally_attendances rows"
+    }),
+    registrations: t.Array(myRegistration)
   })
 });
