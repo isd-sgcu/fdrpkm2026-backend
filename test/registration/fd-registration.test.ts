@@ -242,6 +242,7 @@ describe("getMe (FirstDate) - debloated", () => {
       studentId: "6912345678",
       firstName: "Somchai",
       lastName: "Jaidee",
+      faculty: null,
       role: "student",
       registered: true
     });
@@ -254,6 +255,7 @@ describe("getMe (FirstDate) - debloated", () => {
       studentId: "6912345678",
       firstName: "Somchai",
       lastName: "Jaidee",
+      faculty: null,
       role: "student",
       registered: false
     });

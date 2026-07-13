@@ -291,6 +291,7 @@ describe("Production Flow Integration Tests", () => {
       studentId: "6912345678",
       firstName: "Student",
       lastName: "One",
+      faculty: null,
       role: "student",
       registered: false
     });
@@ -305,6 +306,7 @@ describe("Production Flow Integration Tests", () => {
       studentId: "6912345678",
       firstName: "Student",
       lastName: "One",
+      faculty: null,
       role: "student",
       registered: true
     });

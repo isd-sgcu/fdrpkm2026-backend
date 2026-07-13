@@ -6,5 +6,6 @@ export * from "./identity.schema";
 export * from "./entries.schema";
 export * from "./games.schema";
 export * from "./houses.schema";
+export * from "./walk-rally.schema";
 export * from "./relations";
 export * from "./auth.schema";

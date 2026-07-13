@@ -4,6 +4,11 @@ import { entries } from "./entries.schema";
 import { checkpoints, scans } from "./games.schema";
 import { groupHouseChoices, groups, houses } from "./houses.schema";
 import { registrations, students, travelLegs } from "./identity.schema";
+import {
+  walkRallyActivities,
+  walkRallyAttendances,
+  walkRallyRegistrations
+} from "./walk-rally.schema";
 
 export const studentsRelations = relations(students, ({ many }) => ({
   registrations: many(registrations),
@@ -12,7 +17,11 @@ export const studentsRelations = relations(students, ({ many }) => ({
   // entrant is unique per (project, student); drizzle's reverse is many() -> one row per project.
   entriesAsEntrant: many(entries, { relationName: "entrant" }),
   entriesScanned: many(entries, { relationName: "scanner" }),
-  scans: many(scans)
+  scans: many(scans),
+  walkRallyRegistrations: many(walkRallyRegistrations),
+  // walk_rally_attendances has 2 FKs to students -> both reverse sides need a relationName.
+  walkRallyAttendances: many(walkRallyAttendances, { relationName: "walkRallyAttendee" }),
+  walkRallyAttendancesScanned: many(walkRallyAttendances, { relationName: "walkRallyScanner" })
 }));
 
 export const registrationsRelations = relations(registrations, ({ one, many }) => ({
@@ -69,4 +78,37 @@ export const groupsRelations = relations(groups, ({ one, many }) => ({
 export const groupHouseChoicesRelations = relations(groupHouseChoices, ({ one }) => ({
   group: one(groups, { fields: [groupHouseChoices.groupId], references: [groups.id] }),
   house: one(houses, { fields: [groupHouseChoices.houseId], references: [houses.id] })
+}));
+
+export const walkRallyActivitiesRelations = relations(walkRallyActivities, ({ many }) => ({
+  registrations: many(walkRallyRegistrations),
+  attendances: many(walkRallyAttendances)
+}));
+
+export const walkRallyRegistrationsRelations = relations(walkRallyRegistrations, ({ one }) => ({
+  student: one(students, {
+    fields: [walkRallyRegistrations.studentId],
+    references: [students.id]
+  }),
+  activity: one(walkRallyActivities, {
+    fields: [walkRallyRegistrations.activityId],
+    references: [walkRallyActivities.id]
+  })
+}));
+
+export const walkRallyAttendancesRelations = relations(walkRallyAttendances, ({ one }) => ({
+  student: one(students, {
+    fields: [walkRallyAttendances.studentId],
+    references: [students.id],
+    relationName: "walkRallyAttendee"
+  }),
+  activity: one(walkRallyActivities, {
+    fields: [walkRallyAttendances.activityId],
+    references: [walkRallyActivities.id]
+  }),
+  scannedBy: one(students, {
+    fields: [walkRallyAttendances.scannedBy],
+    references: [students.id],
+    relationName: "walkRallyScanner"
+  })
 }));

@@ -15,7 +15,8 @@ const f = registrationFields();
 const rpkmRegistrationBody = t.Composite([
   f.registrationBody,
   t.Object({
-    attendedDays: t.Integer({ title: "Attended days" })
+    attendedDays: t.Integer({ title: "Attended days" }),
+    bottle: t.Boolean({ title: "Water bottle" })
   })
 ]);
 
@@ -54,6 +55,7 @@ const meResult = t.Object({
   studentId: t.String(),
   firstName: t.String(),
   lastName: t.String(),
+  faculty: t.Nullable(t.String()),
   role: t.String(),
   registered: t.Boolean()
 });

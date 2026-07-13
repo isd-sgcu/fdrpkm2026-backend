@@ -143,6 +143,7 @@ export type MeResult = {
   studentId: string;
   firstName: string;
   lastName: string;
+  faculty: string | null;
   role: string;
   registered: boolean;
 };
@@ -201,6 +202,7 @@ const collectProfile = (input: Partial<RegistrationInput>): Partial<NewStudent> 
   if (input.pnoSgcuAwareness !== undefined) profile.pnoSgcuAwareness = input.pnoSgcuAwareness;
   if (input.csoDistrict !== undefined) profile.csoDistrict = input.csoDistrict;
   if (input.csoProvince !== undefined) profile.csoProvince = input.csoProvince;
+  if (input.bottle !== undefined) profile.bottle = input.bottle;
   return profile;
 };
 
@@ -398,6 +400,7 @@ export const getRegistrationMe = async (
       studentId,
       firstName,
       lastName,
+      faculty: null,
       role: "student",
       registered: false
     };
@@ -414,6 +417,7 @@ export const getRegistrationMe = async (
     studentId: student.studentId,
     firstName: student.firstName,
     lastName: student.lastName,
+    faculty: student.faculty,
     role: student.role,
     registered: !!registration
   };
