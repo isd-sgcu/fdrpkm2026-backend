@@ -6,5 +6,6 @@ coverage
 !.env.example
 .DS_Store
 *.log
+gha-creds-*.json
 
 *.db
