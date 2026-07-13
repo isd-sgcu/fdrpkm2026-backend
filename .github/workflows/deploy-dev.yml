@@ -174,7 +174,7 @@ jobs:
               --min-instances 0
               --max-instances 1
               --memory 128Mi
-              --cpu 0.8
+              --cpu 1
               --update-env-vars "NODE_ENV=development"
               --update-env-vars "BETTER_AUTH_URL=${BETTER_AUTH_URL}"
               --update-env-vars "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
