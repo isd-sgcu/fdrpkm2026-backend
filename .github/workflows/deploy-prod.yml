@@ -97,10 +97,8 @@ jobs:
       CLOUD_RUN_SERVICE_PROD: ${{ vars.CLOUD_RUN_SERVICE_PROD }}
       CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
       CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
-      CLOUD_RUN_VPC_CONNECTOR: ${{ vars.CLOUD_RUN_VPC_CONNECTOR }}
-      CLOUD_RUN_VPC_EGRESS: ${{ vars.CLOUD_RUN_VPC_EGRESS || 'private-ranges-only' }}
       CLOUD_RUN_MIN_INSTANCES: ${{ vars.CLOUD_RUN_MIN_INSTANCES || '0' }}
-      CLOUD_RUN_MAX_INSTANCES: ${{ vars.CLOUD_RUN_MAX_INSTANCES || '3' }}
+      CLOUD_RUN_MAX_INSTANCES: ${{ vars.CLOUD_RUN_MAX_INSTANCES || '10' }}
       CLOUD_RUN_CONCURRENCY: ${{ vars.CLOUD_RUN_CONCURRENCY || '20' }}
       CLOUD_RUN_MEMORY: ${{ vars.CLOUD_RUN_MEMORY || '512Mi' }}
       CLOUD_RUN_CPU: ${{ vars.CLOUD_RUN_CPU || '1' }}
@@ -198,12 +196,6 @@ jobs:
 
           if ! [[ "${CLOUD_RUN_MEMORY}" =~ ^[1-9][0-9]*(Mi|Gi)$ ]]; then
             echo "::error::CLOUD_RUN_MEMORY must use a value such as 512Mi or 1Gi."
-            exit 1
-          fi
-
-          if [ "${CLOUD_RUN_VPC_EGRESS}" != "private-ranges-only" ] && \
-             [ "${CLOUD_RUN_VPC_EGRESS}" != "all-traffic" ]; then
-            echo "::error::CLOUD_RUN_VPC_EGRESS must be private-ranges-only or all-traffic."
             exit 1
           fi
 
@@ -340,13 +332,6 @@ jobs:
               --timeout 300s
               --quiet
             )
-
-            if [ -n "${CLOUD_RUN_VPC_CONNECTOR}" ]; then
-              args+=(
-                --vpc-connector "${CLOUD_RUN_VPC_CONNECTOR}"
-                --vpc-egress "${CLOUD_RUN_VPC_EGRESS}"
-              )
-            fi
 
             if [ "${use_no_traffic}" = "true" ]; then
               args+=(--no-traffic)
