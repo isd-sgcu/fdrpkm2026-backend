@@ -96,13 +96,12 @@ Table walk_rally_registrations {
   id uuid [pk, default: `gen_random_uuid()`]
   student_id uuid [ref: > students.id]
   activity_id uuid [ref: > walk_rally_activities.id]
-  round int [note: 'CHECK between 1 and 6. round times live in app config']
+  round int [note: 'CHECK between 1 and 6. round times live in app config, per-activity schedule (default vs cu_museum differ). no DB uniqueness on round number alone -- overlap checked in service']
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
 
   indexes {
     (student_id, activity_id) [unique, note: 'cannot register same activity twice']
-    (student_id, round) [unique, note: 'no overlapping time slots. all activities share the 6 round times']
     (activity_id, round) [note: 'capacity count. cap 30 per slot enforced in tx']
   }
 }

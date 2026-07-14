@@ -86,9 +86,8 @@ erDiagram
         uuid id PK
         uuid student_id FK
         uuid activity_id FK
-        int round "1..6; times in config"
+        int round "1..6; per-activity schedule in config"
         unique student_activity "uniq(student_id, activity_id)"
-        unique student_round "uniq(student_id, round)"
     }
     walk_rally_attendances {
         uuid id PK
@@ -211,7 +210,7 @@ stateDiagram-v2
 ```mermaid
 flowchart TD
     Open[22/7 00:00 reg opens] --> Pick[Pick activity + round slot]
-    Pick --> Checks{same activity done?<br/>same round taken?<br/>slot full 30?}
+    Pick --> Checks{same activity done?<br/>time slot overlaps another booking?<br/>slot full 30?}
     Checks -- any yes --> Blocked[Blocked]
     Checks -- all no --> Booked[(walk_rally_registrations)]
     Booked --> Edit[edit/cancel until 29/7 23:59]

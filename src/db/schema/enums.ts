@@ -18,6 +18,9 @@ export const gameEnum = pgEnum("game", ["jigsaw", "csr", "walkrally"]);
 // walk rally activity type (8 rows: 3 workshops, 4 museums, 1 minigame)
 export const walkRallyKindEnum = pgEnum("walk_rally_kind", ["workshop", "museum", "minigame"]);
 
+// walk rally regis source which has existed in registration table (preregis) and walk-in (onsite).
+export const attendanceSourceEnum = pgEnum("attendance_source", ["preregis", "onsite"]);
+
 // "other" -> vehicle_other free text
 export const vehicleEnum = pgEnum("vehicle", [
   "private_car",

@@ -27,6 +27,16 @@ export const AppErrorCode = {
   HOUSE_PREF_INCOMPLETE: "HOUSE_PREF_INCOMPLETE",
   /** 500: unexpected server-side error, request could not be fulfilled. */
   INTERNAL_SERVER_ERROR: "INTERNAL_SERVER_ERROR",
+  /** 409: student already registered for this walk rally activity. */
+  ACTIVITY_ALREADY_REGISTERED: "ACTIVITY_ALREADY_REGISTERED",
+  /** 404: walk rally activity code does not exist. */
+  INVALID_ACTIVITY: "INVALID_ACTIVITY",
+  /** 409: student already holds the 6-point walk rally maximum. */
+  POINTS_CAP_REACHED: "POINTS_CAP_REACHED",
+  /** 403: outside the walk rally registration window (open/close). */
+  REGISTRATION_CLOSED: "REGISTRATION_CLOSED",
+  /** 409: student already has a registration with an overlapping time slot. */
+  ROUND_CONFLICT: "ROUND_CONFLICT",
   /** 404: checkpoint code does not exist for the given rpkm game. */
   INVALID_CHECKPOINT: "INVALID_CHECKPOINT",
   /** 400: `:gameType` is not a valid rpkm checkpoint game (jigsaw/csr). */
