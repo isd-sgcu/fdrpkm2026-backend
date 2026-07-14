@@ -47,6 +47,77 @@ const toMinutes = (hhmm: string) => {
 const overlaps = (aStart: number, aEnd: number, bStart: number, bEnd: number) =>
   aStart < bEnd && bStart < aEnd;
 
+/** @desc `Database` or the `tx` a transaction callback receives — both support the query builder calls the helpers below use. */
+type Executor = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+/**
+ * @desc Shared by registerForActivity and changeRound. Throws if `studentId`
+ * holds a registration whose round number matches `targetRound`, or whose
+ * time (on *its own* activity's schedule) overlaps `[targetStart, targetEnd)`.
+ * Must run against the same `tx` the caller locked the student's row in.
+ */
+const assertNoRoundConflict = async (
+  database: Executor,
+  studentId: string,
+  targetRound: number,
+  targetStart: number,
+  targetEnd: number
+): Promise<void> => {
+  const myRegistrations = await database
+    .select({
+      round: walkRallyRegistrations.round,
+      activityCode: walkRallyActivities.code
+    })
+    .from(walkRallyRegistrations)
+    .innerJoin(walkRallyActivities, eq(walkRallyRegistrations.activityId, walkRallyActivities.id))
+    .where(eq(walkRallyRegistrations.studentId, studentId));
+
+  const conflict = myRegistrations.some((r) => {
+    if (r.round === targetRound) return true;
+    const slot = WALK_RALLY.rounds[scheduleFor(r.activityCode)].find((s) => s.round === r.round)!;
+    return overlaps(targetStart, targetEnd, toMinutes(slot.start), toMinutes(slot.end));
+  });
+  if (conflict) throw new WalkRallyServiceError("ROUND_CONFLICT");
+};
+
+/**
+ * @desc Shared by registerForActivity and changeRound. Inserts a (student, activity, round) row
+ * Returns `undefined` if (student_id, activity_id) already exists
+ */
+const insertRegistration = async (
+  database: Executor,
+  studentId: string,
+  activityId: string,
+  round: number
+) => {
+  const [inserted] = await database
+    .insert(walkRallyRegistrations)
+    .values({ studentId, activityId, round })
+    .onConflictDoNothing({
+      target: [walkRallyRegistrations.studentId, walkRallyRegistrations.activityId]
+    })
+    .returning();
+  return inserted;
+};
+
+/**
+ * @desc Shared by unregisterFromActivity and changeRound. Deletes the
+ * student's registration row for one activity (any round). Returns the
+ * deleted row, or `undefined` if there was none.
+ */
+const deleteRegistration = async (database: Executor, studentId: string, activityId: string) => {
+  const [deleted] = await database
+    .delete(walkRallyRegistrations)
+    .where(
+      and(
+        eq(walkRallyRegistrations.studentId, studentId),
+        eq(walkRallyRegistrations.activityId, activityId)
+      )
+    )
+    .returning();
+  return deleted;
+};
+
 // Service functions
 /**
  * @name getActivityRounds
@@ -243,31 +314,9 @@ const registerForActivity = async (
   return database.transaction(async (tx) => {
     await tx.select().from(students).where(eq(students.id, student.id)).for("update");
 
-    const myRegistrations = await tx
-      .select({
-        round: walkRallyRegistrations.round,
-        activityCode: walkRallyActivities.code
-      })
-      .from(walkRallyRegistrations)
-      .innerJoin(walkRallyActivities, eq(walkRallyRegistrations.activityId, walkRallyActivities.id))
-      .where(eq(walkRallyRegistrations.studentId, student.id));
+    await assertNoRoundConflict(tx, student.id, input.round, targetStart, targetEnd);
 
-    // Check overlap time
-    const conflict = myRegistrations.some((r) => {
-      if (r.round === input.round) return true;
-      const slot = WALK_RALLY.rounds[scheduleFor(r.activityCode)].find((s) => s.round === r.round)!;
-      return overlaps(targetStart, targetEnd, toMinutes(slot.start), toMinutes(slot.end));
-    });
-    if (conflict) throw new WalkRallyServiceError("ROUND_CONFLICT");
-
-    // Create registration
-    const [inserted] = await tx
-      .insert(walkRallyRegistrations)
-      .values({ studentId: student.id, activityId: activity.id, round: input.round })
-      .onConflictDoNothing({
-        target: [walkRallyRegistrations.studentId, walkRallyRegistrations.activityId]
-      })
-      .returning();
+    const inserted = await insertRegistration(tx, student.id, activity.id, input.round);
     if (!inserted) throw new WalkRallyServiceError("ACTIVITY_ALREADY_REGISTERED");
 
     return { code: activity.code, round: inserted.round };
@@ -302,18 +351,73 @@ const unregisterFromActivity = async (
     .where(eq(walkRallyActivities.code, activityCode));
   if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
 
-  const deleted = await database
-    .delete(walkRallyRegistrations)
-    .where(
-      and(
-        eq(walkRallyRegistrations.studentId, student.id),
-        eq(walkRallyRegistrations.activityId, activity.id)
-      )
-    )
-    .returning();
-  if (deleted.length === 0) throw new WalkRallyServiceError("NOT_FOUND");
+  const deleted = await deleteRegistration(database, student.id, activity.id);
+  if (!deleted) throw new WalkRallyServiceError("NOT_FOUND");
 
   return { code: activity.code };
+};
+
+/**
+ * @name changeRound
+ * @api {PATCH} /walkrally/registrations/:code
+ * @desc change round of the activity registration.
+ * logic: delete the old regis, then insert a new regis because the created_at timestamp is used to determine the place of the registration.
+ * ---
+ * @param studentId CUNET id (from authMiddleware)
+ * @param activityCode `walk_rally_activities.code`
+ * @param round requested round (1-6)
+ * @throws {WalkRallyServiceError} REGISTRATION_CLOSED if outside the
+ *   regOpen/regClose window, NOT_FOUND if the student can't be resolved or
+ *   holds no registration for this activity, INVALID_ACTIVITY, ROUND_CONFLICT
+ */
+const changeRound = async (
+  studentId: string,
+  activityCode: string,
+  round: number,
+  deps: WalkRallyDeps = {}
+): Promise<{ code: string; round: number }> => {
+  if (!isEventActive("rpkm_walkrally_registration"))
+    throw new WalkRallyServiceError("REGISTRATION_CLOSED");
+
+  const database = deps.db ?? defaultDb;
+  const student = await resolveCurrentStudent(studentId, deps);
+
+  const [activity] = await database
+    .select()
+    .from(walkRallyActivities)
+    .where(eq(walkRallyActivities.code, activityCode));
+  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+
+  const targetSlot = WALK_RALLY.rounds[scheduleFor(activity.code)].find((s) => s.round === round)!;
+  const targetStart = toMinutes(targetSlot.start);
+  const targetEnd = toMinutes(targetSlot.end);
+
+  // update the registration row in a transaction
+  return database.transaction(async (tx) => {
+    await tx.select().from(students).where(eq(students.id, student.id)).for("update");
+
+    const [own] = await tx
+      .select()
+      .from(walkRallyRegistrations)
+      .where(
+        and(
+          eq(walkRallyRegistrations.studentId, student.id),
+          eq(walkRallyRegistrations.activityId, activity.id)
+        )
+      );
+    if (!own) throw new WalkRallyServiceError("NOT_FOUND");
+
+    // Check if the requested round is the same as the current round.
+    if (own.round === round) return { code: activity.code, round };
+
+    await deleteRegistration(tx, student.id, activity.id);
+
+    // Check for round conflicts with the new requested round. if there is a conflict, the transaction will be rolled back and the original registration will remain intact.
+    await assertNoRoundConflict(tx, student.id, round, targetStart, targetEnd);
+
+    const inserted = await insertRegistration(tx, student.id, activity.id, round);
+    return { code: activity.code, round: inserted!.round };
+  });
 };
 
 // Namespace object — routes call `WalkRallyService.<fn>(...)` instead of
@@ -322,5 +426,6 @@ export const WalkRallyService = {
   getActivityRounds,
   getMe,
   registerForActivity,
-  unregisterFromActivity
+  unregisterFromActivity,
+  changeRound
 };

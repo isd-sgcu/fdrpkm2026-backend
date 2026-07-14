@@ -65,5 +65,8 @@ export const WalkRallyModel = new Elysia().model({
   }),
   unregisterActivityResponse: t.Object({
     code: t.String({ title: "Activity Code" })
+  }),
+  changeRoundBody: t.Object({
+    round: t.Integer({ minimum: 1, maximum: 6, title: "Round" })
   })
 });
