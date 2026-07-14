@@ -56,7 +56,7 @@ GCP_REGION-docker.pkg.dev/GCP_PROJECT_ID/GAR_REPOSITORY/fdrpkm2026-backend:<tag>
 
 - The workflow deploys the commit-SHA image to `CLOUD_RUN_SERVICE_DEV`.
 - The dev Cloud Run service is deployed with `--allow-unauthenticated`, so it is publicly invokable for temporary smoke testing.
-- Dev scaling/resources are fixed at min instances `0`, max instances `1`, memory `128Mi`, and CPU `1`.
+- Dev scaling/resources are fixed at min instances `0`, max instances `1`, memory `256Mi`, CPU `1`, and the Gen1 execution environment.
 - On the first deploy, Cloud Run creates the service with live traffic because `--no-traffic` is not supported when creating a new service.
 - On later deploys, the workflow deploys the candidate revision without traffic, health-checks it, then promotes it.
 - Runtime app config is injected using a protected temporary env file that is deleted immediately after deployment.

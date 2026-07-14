@@ -242,10 +242,10 @@ jobs:
               --allow-unauthenticated
               --service-account "${CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT}"
               --set-cloudsql-instances "${CLOUD_SQL_CONNECTION_NAME}"
-              --execution-environment gen2
+              --execution-environment gen1
               --min-instances 0
               --max-instances 1
-              --memory 128Mi
+              --memory 256Mi
               --cpu 1
               --env-vars-file "${CLOUD_RUN_ENV_FILE}"
               --quiet
