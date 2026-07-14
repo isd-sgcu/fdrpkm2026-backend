@@ -27,8 +27,19 @@ export const createApp = () =>
         return status(error.httpStatus, errorResponse(error.code, error.context));
       }
       switch (code) {
-        case "VALIDATION":
-          return status(400, error.detail(error.message));
+        case "VALIDATION": {
+          // Same envelope as every other error; context carries the first
+          // failing property so the client can point at the field.
+          const first = error.all[0];
+          return status(
+            400,
+            errorResponse("VALIDATION", {
+              on: error.type,
+              property: first && "path" in first ? first.path : undefined,
+              summary: first?.summary
+            })
+          );
+        }
         case "NOT_FOUND":
           return status(404, errorResponse("NOT_FOUND", { message: error.message }));
         case "INTERNAL_SERVER_ERROR":

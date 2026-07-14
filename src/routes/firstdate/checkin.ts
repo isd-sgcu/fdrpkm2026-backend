@@ -18,6 +18,7 @@ export const fdCheckinRoutes = new Elysia({ prefix: "/checkin" })
       response: {
         200: "Checkin.SuccessCheckinResponse",
         ...tAppErrors(
+          "VALIDATION",
           "UNAUTHORIZED",
           "FORBIDDEN_NOT_STAFF",
           "STUDENT_NOT_FOUND",

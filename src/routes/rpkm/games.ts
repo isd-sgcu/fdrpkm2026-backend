@@ -25,7 +25,13 @@ export const gameRoute = new Elysia({ prefix: "/game" })
       params: "Games.GameTypeParams",
       response: {
         200: tSuccessResponse(GamesModel.models.progressResponse.Schema()),
-        ...tAppErrors("INVALID_GAME_TYPE", "UNAUTHORIZED", "NOT_FRESHMEN", "NOT_FOUND")
+        ...tAppErrors(
+          "VALIDATION",
+          "INVALID_GAME_TYPE",
+          "UNAUTHORIZED",
+          "NOT_FRESHMEN",
+          "NOT_FOUND"
+        )
       }
     }
   )
@@ -44,6 +50,7 @@ export const gameRoute = new Elysia({ prefix: "/game" })
       response: {
         200: tSuccessResponse(GamesModel.models.collectCheckpointResponse.Schema()),
         ...tAppErrors(
+          "VALIDATION",
           "INVALID_GAME_TYPE",
           "UNAUTHORIZED",
           "NOT_FRESHMEN",

@@ -68,7 +68,10 @@ export const AppErrorCode = {
   /** 401: request lacks valid authentication credentials. */
   UNAUTHORIZED: 401,
   /** 409: user already exists, cannot register again. */
-  USER_ALREADY_EXISTS: 409
+  USER_ALREADY_EXISTS: 409,
+  /** 400: request failed schema validation (body/params/query). Produced by
+   * the global onError for Elysia VALIDATION errors — never thrown manually. */
+  VALIDATION: 400
 } as const;
 
 /** Union of AppErrorCode key names, e.g. "NOT_FOUND". */
@@ -87,6 +90,16 @@ export const AppErrorContext = {
   ALREADY_CHECKED_IN: t.Object({
     scannedAt: t.Date(),
     scannedBy: t.String({ format: "uuid" })
+  }),
+  VALIDATION: t.Object({
+    on: t.String({
+      description: "Which part of the request failed validation",
+      examples: ["body", "params", "query"]
+    }),
+    property: t.Optional(
+      t.String({ description: "JSON pointer to the failing property", examples: ["/pdpaConsent"] })
+    ),
+    summary: t.Optional(t.String({ examples: ["Property 'pdpaConsent' should be true"] }))
   })
 } as const satisfies Partial<Record<AppErrorCode, TSchema>>;
 

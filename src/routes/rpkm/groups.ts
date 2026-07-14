@@ -22,6 +22,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       response: {
         200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
         ...tAppErrors(
+          "VALIDATION",
           "UNAUTHORIZED",
           "NOT_FRESHMEN",
           "NOT_FOUND",
@@ -78,7 +79,14 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       body: "Groups.HousePreferencesBody",
       response: {
         200: tSuccessResponse(GroupsModel.models.housePreferencesResponse.Schema()),
-        ...tAppErrors("BAD_REQUEST", "UNAUTHORIZED", "NOT_LEADER", "NOT_FOUND", "HOUSE_PICK_CLOSED")
+        ...tAppErrors(
+          "VALIDATION",
+          "BAD_REQUEST",
+          "UNAUTHORIZED",
+          "NOT_LEADER",
+          "NOT_FOUND",
+          "HOUSE_PICK_CLOSED"
+        )
       }
     }
   )
@@ -99,6 +107,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       response: {
         200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
         ...tAppErrors(
+          "VALIDATION",
           "BAD_REQUEST",
           "UNAUTHORIZED",
           "NOT_LEADER",

@@ -26,7 +26,13 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       body: "FdUser.RegistrationBody",
       response: {
         200: tSuccessResponse(FdRegistrationModel.models.registrationResult.Schema()),
-        ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN", "ALREADY_REGISTERED", "INTERNAL_SERVER_ERROR")
+        ...tAppErrors(
+          "VALIDATION",
+          "UNAUTHORIZED",
+          "NOT_FRESHMEN",
+          "ALREADY_REGISTERED",
+          "INTERNAL_SERVER_ERROR"
+        )
       }
     }
   )
@@ -54,7 +60,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       body: "FdUser.UpdateProfileBody",
       response: {
         200: tSuccessResponse(FdRegistrationModel.models.profileResult.Schema()),
-        ...tAppErrors("UNAUTHORIZED", "NOT_FOUND")
+        ...tAppErrors("VALIDATION", "UNAUTHORIZED", "NOT_FOUND")
       }
     }
   );

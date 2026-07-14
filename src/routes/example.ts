@@ -51,8 +51,10 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       response: {
         200: "Example.UserUpdateBody",
         // Error codes defined in AppErrorCode enum in src/utils/error.ts;
-        // statuses (401/403/404) derive from the codes automatically.
-        ...tAppErrors("UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND")
+        // statuses (400/401/403/404) derive from the codes automatically.
+        // VALIDATION covers params/body schema failures (rejected by Elysia
+        // before the handler; wrapped into the envelope by onError).
+        ...tAppErrors("VALIDATION", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND")
       }
     }
   )
@@ -84,7 +86,7 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       response: {
         200: "Example.UserUpdateBody", // Type-safe response body, auto api doc and also auto validation
         // NOT_FRESHMEN and FORBIDDEN share 403 — tAppErrors unions them.
-        ...tAppErrors("UNAUTHORIZED", "FORBIDDEN", "NOT_FRESHMEN")
+        ...tAppErrors("VALIDATION", "UNAUTHORIZED", "FORBIDDEN", "NOT_FRESHMEN")
       }
     }
   )
@@ -103,7 +105,7 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       params: "Example.UserUpdateParams",
       response: {
         204: t.Void(),
-        ...tAppErrors("UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND")
+        ...tAppErrors("VALIDATION", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND")
       }
     }
   )

@@ -23,6 +23,7 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
       response: {
         200: tSuccessResponse(CheckinModel.models.Entry.Schema()),
         ...tAppErrors(
+          "VALIDATION",
           "UNAUTHORIZED",
           "FORBIDDEN_NOT_STAFF",
           "STUDENT_NOT_FOUND",
@@ -43,6 +44,7 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
       response: {
         200: tSuccessResponse(CheckinModel.models.Entry.Schema()),
         ...tAppErrors(
+          "VALIDATION",
           "UNAUTHORIZED",
           "FORBIDDEN_NOT_STAFF",
           "STUDENT_NOT_FOUND",

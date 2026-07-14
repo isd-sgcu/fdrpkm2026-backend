@@ -36,7 +36,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     params: "Houses.HouseId",
     response: {
       200: "Houses.House",
-      ...tAppErrors("NOT_FOUND")
+      ...tAppErrors("VALIDATION", "NOT_FOUND")
     }
   })
   .get(
