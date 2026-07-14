@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db as defaultDb, type Database } from "@src/db";
 import {
@@ -8,7 +8,7 @@ import {
   walkRallyRegistrations
 } from "@src/db/schema";
 import type { AppErrorCode } from "@src/utils";
-import { isEventActive } from "@src/utils/flags";
+import { isEventActive, isEventPassed } from "@src/utils/flags";
 import { WALK_RALLY } from "@src/constants";
 
 // Constant
@@ -274,10 +274,53 @@ const registerForActivity = async (
   });
 };
 
+/**
+ * @name unregisterFromActivity
+ * @api {DELETE} /walkrally/registrations/:code
+ * @desc Cancels the current student's registration for activity.
+ * ---
+ * @param studentId CUNET id (from authMiddleware)
+ * @param activityCode `walk_rally_activities.code`
+ * @throws {WalkRallyServiceError} REGISTRATION_CLOSED if past regClose,
+ *   NOT_FOUND if the student can't be resolved or holds no registration for
+ *   this activity, INVALID_ACTIVITY
+ */
+const unregisterFromActivity = async (
+  studentId: string,
+  activityCode: string,
+  deps: WalkRallyDeps = {}
+): Promise<{ code: string }> => {
+  if (isEventPassed("rpkm_walkrally_registration"))
+    throw new WalkRallyServiceError("REGISTRATION_CLOSED");
+
+  const database = deps.db ?? defaultDb;
+  const student = await resolveCurrentStudent(studentId, deps);
+
+  const [activity] = await database
+    .select()
+    .from(walkRallyActivities)
+    .where(eq(walkRallyActivities.code, activityCode));
+  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+
+  const deleted = await database
+    .delete(walkRallyRegistrations)
+    .where(
+      and(
+        eq(walkRallyRegistrations.studentId, student.id),
+        eq(walkRallyRegistrations.activityId, activity.id)
+      )
+    )
+    .returning();
+  if (deleted.length === 0) throw new WalkRallyServiceError("NOT_FOUND");
+
+  return { code: activity.code };
+};
+
 // Namespace object — routes call `WalkRallyService.<fn>(...)` instead of
 export const WalkRallyService = {
   WalkRallyServiceError,
   getActivityRounds,
   getMe,
-  registerForActivity
+  registerForActivity,
+  unregisterFromActivity
 };

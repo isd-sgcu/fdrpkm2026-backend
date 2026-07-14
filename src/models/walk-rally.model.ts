@@ -62,5 +62,8 @@ export const WalkRallyModel = new Elysia().model({
   registerActivityResponse: t.Object({
     code: t.String({ title: "Activity Code" }),
     round: t.Integer({ title: "Round" })
+  }),
+  unregisterActivityResponse: t.Object({
+    code: t.String({ title: "Activity Code" })
   })
 });

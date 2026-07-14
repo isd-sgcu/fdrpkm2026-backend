@@ -15,6 +15,7 @@ import {
  * Walk rally routes: workshops/museums/minigame,
  * slot pre-registration & walk-in across 6 shared rounds, staff attendance scan.
  */
+// eslint-disable-next-line drizzle/enforce-delete-with-where -- flags the whole chain below for its .delete(...) route method (not a Drizzle query)
 export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
   .use(authMiddleware)
   .use(WalkRallyModel)
@@ -110,6 +111,40 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
           tErrorResponse("ACTIVITY_ALREADY_REGISTERED"),
           tErrorResponse("ROUND_CONFLICT")
         ])
+      }
+    }
+  )
+  .delete(
+    "/registrations/:code",
+    async ({ studentId, status, params }) => {
+      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
+
+      try {
+        return successResponse(
+          await WalkRallyService.unregisterFromActivity(studentId, params.code)
+        );
+      } catch (err) {
+        if (err instanceof WalkRallyService.WalkRallyServiceError) {
+          switch (err.code) {
+            case "REGISTRATION_CLOSED":
+              return status(403, errorResponse("REGISTRATION_CLOSED"));
+            case "INVALID_ACTIVITY":
+              return status(404, errorResponse("INVALID_ACTIVITY"));
+            default:
+              return status(404, errorResponse("NOT_FOUND"));
+          }
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      params: "WalkRally.ActivityCodeParams",
+      response: {
+        200: tSuccessResponse(WalkRallyModel.models.unregisterActivityResponse.Schema()),
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("REGISTRATION_CLOSED")]),
+        404: t.Union([tErrorResponse("INVALID_ACTIVITY"), tErrorResponse("NOT_FOUND")])
       }
     }
   );
