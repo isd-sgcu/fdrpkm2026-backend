@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 
 import { db as defaultDb, type Database } from "@src/db";
 import { checkpoints, scans, students } from "@src/db/schema";
-import type { AppErrorCode } from "@src/utils";
+import { AppError } from "@src/utils";
 import { isEventActive } from "@src/utils/flags";
 
 // Constant
@@ -21,17 +21,10 @@ const EVENT_BY_GAME: Record<GameType, "rpkm_jigsaw" | "rpkm_csr"> = {
   csr: "rpkm_csr"
 };
 
-/** Thrown on expected business failures; controller maps `code` to an HTTP status. */
-class GamesServiceError extends Error {
-  constructor(public code: AppErrorCode) {
-    super(code);
-  }
-}
-
 // Helper function
-/** @throws {GamesServiceError} INVALID_GAME_TYPE if not "jigsaw" or "csr" */
+/** @throws {AppError} INVALID_GAME_TYPE if not "jigsaw" or "csr" */
 const assertValidGameType = (gameType: string): GameType => {
-  if (!isGameType(gameType)) throw new GamesServiceError("INVALID_GAME_TYPE");
+  if (!isGameType(gameType)) throw new AppError("INVALID_GAME_TYPE");
   return gameType;
 };
 
@@ -50,12 +43,12 @@ const distanceMeters = (aLat: number, aLng: number, bLat: number, bLng: number):
 /**
  * @desc Resolves the `students` row for a CUNET id.
  * @param studentId CUNET id, as derived by authMiddleware from the session email
- * @throws {GamesServiceError} NOT_FOUND if no `students` row matches
+ * @throws {AppError} NOT_FOUND if no `students` row matches
  */
 const resolveCurrentStudent = async (studentId: string, deps: GamesDeps = {}) => {
   const database = deps.db ?? defaultDb;
   const [student] = await database.select().from(students).where(eq(students.studentId, studentId));
-  if (!student) throw new GamesServiceError("NOT_FOUND");
+  if (!student) throw new AppError("NOT_FOUND");
   return student;
 };
 
@@ -67,7 +60,7 @@ const resolveCurrentStudent = async (studentId: string, deps: GamesDeps = {}) =>
  * ---
  * @param studentId CUNET id (from authMiddleware)
  * @param gameType raw `:gameType` path segment
- * @throws {GamesServiceError} INVALID_GAME_TYPE, NOT_FOUND if the student can't be resolved
+ * @throws {AppError} INVALID_GAME_TYPE, NOT_FOUND if the student can't be resolved
  */
 type CollectedCheckpoint = {
   checkpointId: string;
@@ -110,7 +103,7 @@ const getProgress = async (
  * @param studentId CUNET id (from authMiddleware)
  * @param gameType raw `:gameType` path segment
  * @param input scanned `code` plus the device's `lat`/`lng`
- * @throws {GamesServiceError} INVALID_GAME_TYPE, GAME_CLOSED, NOT_FOUND if the student
+ * @throws {AppError} INVALID_GAME_TYPE, GAME_CLOSED, NOT_FOUND if the student
  * can't be resolved, INVALID_CHECKPOINT, OUT_OF_GEOFENCE, or ALREADY_COLLECTED
  */
 type CollectInput = { code: string; lat: number; lng: number };
@@ -122,7 +115,7 @@ const collectCheckpoint = async (
   deps: GamesDeps = {}
 ): Promise<{ checkpointId: string; code: string; scannedAt: Date }> => {
   const game = assertValidGameType(gameType);
-  if (!isEventActive(EVENT_BY_GAME[game])) throw new GamesServiceError("GAME_CLOSED");
+  if (!isEventActive(EVENT_BY_GAME[game])) throw new AppError("GAME_CLOSED");
 
   const database = deps.db ?? defaultDb;
   const student = await resolveCurrentStudent(studentId, deps);
@@ -132,12 +125,12 @@ const collectCheckpoint = async (
     .select()
     .from(checkpoints)
     .where(and(eq(checkpoints.game, game), eq(checkpoints.code, input.code)));
-  if (!checkpoint) throw new GamesServiceError("INVALID_CHECKPOINT");
+  if (!checkpoint) throw new AppError("INVALID_CHECKPOINT");
 
   // check coordinates are within the checkpoint's geofence radius
   if (checkpoint.lat !== null && checkpoint.lng !== null) {
     const distance = distanceMeters(input.lat, input.lng, checkpoint.lat, checkpoint.lng);
-    if (distance > checkpoint.geofenceRadiusM) throw new GamesServiceError("OUT_OF_GEOFENCE");
+    if (distance > checkpoint.geofenceRadiusM) throw new AppError("OUT_OF_GEOFENCE");
   }
 
   // onConflictDoNothing against scans_checkpoint_student_unique closes the
@@ -152,14 +145,13 @@ const collectCheckpoint = async (
     })
     .onConflictDoNothing({ target: [scans.checkpointId, scans.studentId] })
     .returning();
-  if (!scan) throw new GamesServiceError("ALREADY_COLLECTED");
+  if (!scan) throw new AppError("ALREADY_COLLECTED");
 
   return { checkpointId: checkpoint.id, code: checkpoint.code, scannedAt: scan.scannedAt };
 };
 
 // Namespace object — routes call `GamesService.<fn>(...)` instead of
 export const GamesService = {
-  GamesServiceError,
   getProgress,
   collectCheckpoint
 };

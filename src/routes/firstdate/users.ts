@@ -1,14 +1,15 @@
-import { Elysia, t } from "elysia";
+import { Elysia } from "elysia";
 
-import { errorResponse, successResponse, tErrorResponse, tSuccessResponse } from "@src/utils";
+import { successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
 import { authMiddleware } from "@src/routes/auth";
 import { FdRegistrationModel } from "@src/models/fd-registration.model";
 import { FirstDateService } from "@src/services/firstdate.service";
 
 /**
  * FirstDate user routes — the registration flow (project=firstdate). Thin
- * controllers: auth guard → validate → call service → map to HTTP. Storage +
- * business rules live in FirstDateService (see docs/mvc.md). Mirrors
+ * controllers: auth guard → validate → call service. Storage + business rules
+ * live in FirstDateService (see docs/mvc.md); business failures are AppErrors
+ * handled by the global onError (src/app.ts). Mirrors
  * `src/routes/rpkm/users.ts` but FirstDate has no groups.
  *
  * Own Elysia instance so its model namespace ("FdUser.") is independent.
@@ -19,79 +20,37 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   .prefix("model", "FdUser.")
   .post(
     "/registration",
-    async ({ user, body, status }) => {
-      try {
-        const data = await FirstDateService.registerFd(user, body);
-        return successResponse(data);
-      } catch (err) {
-        if (err instanceof FirstDateService.FirstDateServiceError) {
-          switch (err.code) {
-            case "PDPA_REQUIRED":
-              return status(400, errorResponse("PDPA_REQUIRED", { message: err.message }));
-            case "BAD_REQUEST":
-              return status(400, errorResponse("BAD_REQUEST", { message: err.message }));
-            case "NOT_FRESHMEN":
-              return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
-            case "ALREADY_REGISTERED":
-              return status(409, errorResponse("ALREADY_REGISTERED", { message: err.message }));
-            default:
-              return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
-          }
-        }
-        // Unexpected (non-domain) error — keep the standard envelope.
-        console.error("[fd registration] unexpected error:", err);
-        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
-      }
-    },
+    async ({ user, body }) => successResponse(await FirstDateService.registerFd(user, body)),
     {
       auth: true,
       body: "FdUser.RegistrationBody",
       response: {
         200: tSuccessResponse(FdRegistrationModel.models.registrationResult.Schema()),
-        400: t.Union([
-          tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
-          tErrorResponse("PDPA_REQUIRED", t.Object({ message: t.String() }))
-        ]),
-        401: tErrorResponse("UNAUTHORIZED"),
-        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
-        409: tErrorResponse("ALREADY_REGISTERED", t.Object({ message: t.String() })),
-        500: tErrorResponse("INTERNAL_SERVER_ERROR")
+        ...tAppErrors(
+          "BAD_REQUEST",
+          "PDPA_REQUIRED",
+          "UNAUTHORIZED",
+          "NOT_FRESHMEN",
+          "ALREADY_REGISTERED",
+          "INTERNAL_SERVER_ERROR"
+        )
       }
     }
   )
   // Any authenticated user may read their own debloated info (no freshman/staff gate).
-  .get(
-    "/me",
-    async ({ user, status }) => {
-      try {
-        return successResponse(await FirstDateService.getMe(user));
-      } catch (err) {
-        if (err instanceof FirstDateService.FirstDateServiceError) {
-          if (err.code === "NOT_FRESHMEN") {
-            return status(403, errorResponse("NOT_FRESHMEN", { message: err.message }));
-          }
-        }
-        console.error("[fd /me] unexpected error:", err);
-        return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
-      }
-    },
-    {
-      auth: true,
-      response: {
-        200: tSuccessResponse(FdRegistrationModel.models.meResult.Schema()),
-        401: tErrorResponse("UNAUTHORIZED"),
-        403: tErrorResponse("NOT_FRESHMEN", t.Object({ message: t.String() })),
-        500: tErrorResponse("INTERNAL_SERVER_ERROR")
-      }
+  .get("/me", async ({ user }) => successResponse(await FirstDateService.getMe(user)), {
+    auth: true,
+    response: {
+      200: tSuccessResponse(FdRegistrationModel.models.meResult.Schema()),
+      ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN")
     }
-  )
+  })
   // Detailed registration profile prefill
   .get("/profile", async ({ user }) => successResponse(await FirstDateService.getProfile(user)), {
     auth: true,
     response: {
       200: tSuccessResponse(FdRegistrationModel.models.profileResult.Schema()),
-      401: tErrorResponse("UNAUTHORIZED"),
-      500: tErrorResponse("INTERNAL_SERVER_ERROR")
+      ...tAppErrors("UNAUTHORIZED")
     }
   })
   .patch(
@@ -102,10 +61,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
       body: "FdUser.UpdateProfileBody",
       response: {
         200: tSuccessResponse(FdRegistrationModel.models.profileResult.Schema()),
-        400: tErrorResponse("BAD_REQUEST", t.Object({ message: t.String() })),
-        401: tErrorResponse("UNAUTHORIZED"),
-        404: tErrorResponse("NOT_FOUND", t.Object({ message: t.String() })),
-        500: tErrorResponse("INTERNAL_SERVER_ERROR")
+        ...tAppErrors("BAD_REQUEST", "UNAUTHORIZED", "NOT_FOUND")
       }
     }
   );

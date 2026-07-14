@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { tErrorResponse } from "@src/utils";
+import { tAppErrors } from "@src/utils";
 import { authMiddleware } from "@src/routes/auth";
 import { FirstDateService } from "@src/services/firstdate.service";
 import { fdCheckinRoutes } from "./checkin";
@@ -20,6 +20,6 @@ export const firstdateRoutes = new Elysia({ prefix: "/fd" })
           example: ["John Doe", "Jane Doe"]
         })
       }),
-      401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() }))
+      ...tAppErrors("UNAUTHORIZED")
     }
   });

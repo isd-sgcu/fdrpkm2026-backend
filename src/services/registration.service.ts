@@ -1,7 +1,12 @@
 import { and, eq } from "drizzle-orm";
 
-import type { AppErrorCode } from "@src/utils";
-import { generateJoinCode, isFreshman, deriveStudentId, MAX_JOIN_CODE_ATTEMPTS } from "@src/utils";
+import {
+  generateJoinCode,
+  isFreshman,
+  deriveStudentId,
+  MAX_JOIN_CODE_ATTEMPTS,
+  AppError
+} from "@src/utils";
 import { db as defaultDb, type Database } from "@src/db";
 import {
   groups,
@@ -159,17 +164,6 @@ const MAX_TRAVEL_LEGS = 4;
 const FORCE_DESTINATION_AT_LENGTH = 4;
 const FIXED_LAST_DESTINATION = { district: "Pathum Wan", province: "Bangkok" } as const;
 
-/** Thrown on expected business failures; the controller maps `code` to an
- * HTTP status and surfaces `message` to the caller. */
-export class RegistrationServiceError extends Error {
-  constructor(
-    public code: AppErrorCode,
-    message?: string
-  ) {
-    super(message ?? code);
-  }
-}
-
 const splitName = (name: string): { firstName: string; lastName: string } => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") };
@@ -228,26 +222,20 @@ export const submitRegistration = async (
   const derivedStudentId = deriveStudentId(authUser.email);
 
   if (!isFreshman(derivedStudentId)) {
-    throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+    throw new AppError("NOT_FRESHMEN");
   }
 
   if (input.pdpaConsent !== true) {
-    throw new RegistrationServiceError("PDPA_REQUIRED", "error_pdpa_required");
+    throw new AppError("PDPA_REQUIRED");
   }
 
   const legInputs = input.travelLegs ?? [];
   if (legInputs.length < MIN_TRAVEL_LEGS || legInputs.length > MAX_TRAVEL_LEGS) {
-    throw new RegistrationServiceError(
-      "BAD_REQUEST",
-      `travelLegs must have between ${MIN_TRAVEL_LEGS} and ${MAX_TRAVEL_LEGS} items`
-    );
+    throw new AppError("BAD_REQUEST");
   }
   for (const leg of legInputs) {
     if (leg.vehicle === "other" && !leg.vehicleOther?.trim()) {
-      throw new RegistrationServiceError(
-        "BAD_REQUEST",
-        "vehicleOther is required when vehicle is 'other'"
-      );
+      throw new AppError("BAD_REQUEST");
     }
   }
 
@@ -290,7 +278,7 @@ export const submitRegistration = async (
       .returning();
 
     if (!registration) {
-      throw new RegistrationServiceError("ALREADY_REGISTERED", "error_already_registered");
+      throw new AppError("ALREADY_REGISTERED");
     }
 
     // 3. insert the travel legs (1..4). Only a full 4-leg journey has its final
@@ -332,10 +320,7 @@ export const submitRegistration = async (
         if (created) break;
       }
       if (!created) {
-        throw new RegistrationServiceError(
-          "INTERNAL_SERVER_ERROR",
-          "could not generate a unique join code"
-        );
+        throw new AppError("INTERNAL_SERVER_ERROR");
       }
       await tx
         .update(registrations)
@@ -392,7 +377,7 @@ export const getRegistrationMe = async (
 
   if (!student) {
     if (!isFreshman(studentId)) {
-      throw new RegistrationServiceError("NOT_FRESHMEN", "error_not_freshmen");
+      throw new AppError("NOT_FRESHMEN");
     }
     const { firstName, lastName } = splitName(authUser.name);
     return {
@@ -532,7 +517,7 @@ export const updateRegistrationProfile = async (
     .limit(1);
 
   if (!student) {
-    throw new RegistrationServiceError("NOT_FOUND", "error_student_not_found");
+    throw new AppError("NOT_FOUND");
   }
 
   const [registration] = await database
@@ -542,23 +527,17 @@ export const updateRegistrationProfile = async (
     .limit(1);
 
   if (!registration) {
-    throw new RegistrationServiceError("NOT_FOUND", "error_registration_not_found");
+    throw new AppError("NOT_FOUND");
   }
 
   const legInputs = input.travelLegs;
   if (legInputs !== undefined) {
     if (legInputs.length < MIN_TRAVEL_LEGS || legInputs.length > MAX_TRAVEL_LEGS) {
-      throw new RegistrationServiceError(
-        "BAD_REQUEST",
-        `travelLegs must have between ${MIN_TRAVEL_LEGS} and ${MAX_TRAVEL_LEGS} items`
-      );
+      throw new AppError("BAD_REQUEST");
     }
     for (const leg of legInputs) {
       if (leg.vehicle === "other" && !leg.vehicleOther?.trim()) {
-        throw new RegistrationServiceError(
-          "BAD_REQUEST",
-          "vehicleOther is required when vehicle is 'other'"
-        );
+        throw new AppError("BAD_REQUEST");
       }
     }
   }

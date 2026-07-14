@@ -1,7 +1,16 @@
 import { type TSchema, t } from "elysia";
-import type { AppErrorCode } from "./error";
+import { AppErrorCode, AppErrorContext } from "./error";
 
-export function successResponse<T extends Record<string, unknown>>(data: T) {
+export function successResponse<T extends Record<string, unknown>>(
+  data: T
+): { success: true; data: T };
+export function successResponse<T extends Record<string, unknown>>(
+  data: Promise<T>
+): Promise<{ success: true; data: T }>;
+export function successResponse<T extends Record<string, unknown>>(data: T | Promise<T>) {
+  if (data instanceof Promise) {
+    return data.then((resolved) => ({ success: true as const, data: resolved }));
+  }
   return {
     success: true as const,
     data
@@ -20,7 +29,27 @@ export function successResponse<T extends Record<string, unknown>>(data: T) {
  *   // or
  *   return status(404, errorResponse("NOT_FOUND", { message: "Resource not found" }));
  */
-export function errorResponse<T extends AppErrorCode>(code: T, context?: Record<string, unknown>) {
+export function errorResponse<T extends AppErrorCode>(
+  code: T,
+  context?: Record<string, unknown>
+): { success: false; error: { code: T; context: Record<string, unknown> | undefined } };
+export function errorResponse<T extends AppErrorCode>(
+  code: T,
+  context: Promise<Record<string, unknown>>
+): Promise<{ success: false; error: { code: T; context: Record<string, unknown> } }>;
+export function errorResponse<T extends AppErrorCode>(
+  code: T,
+  context?: Record<string, unknown> | Promise<Record<string, unknown>>
+) {
+  if (context instanceof Promise) {
+    return context.then((resolved) => ({
+      success: false as const,
+      error: {
+        code,
+        context: resolved
+      }
+    }));
+  }
   return {
     success: false as const,
     error: {
@@ -75,4 +104,34 @@ export function tErrorResponse<T extends TSchema, U extends AppErrorCode>(code: 
     }),
     error: errorSchema
   });
+}
+
+/**
+ * Builds the error half of a route's `response` schema map from the
+ * {@link AppErrorCode}s its handler (or the services it calls) can throw.
+ * HTTP statuses are derived from AppErrorCode; codes sharing a status are
+ * merged into a t.Union. Context schemas registered in {@link AppErrorContext}
+ * are attached automatically.
+ * @example
+ *   response: {
+ *     200: tSuccessResponse(t.Object({ name: t.String() })),
+ *     ...tAppErrors("UNAUTHORIZED", "NOT_FOUND", "GROUP_FULL", "ALREADY_CONFIRMED")
+ *   }
+ */
+export function tAppErrors<C extends AppErrorCode>(
+  ...codes: C[]
+): { [S in (typeof AppErrorCode)[C]]: TSchema } {
+  const byStatus = new Map<number, TSchema[]>();
+  for (const code of codes) {
+    const context = (AppErrorContext as Partial<Record<AppErrorCode, TSchema>>)[code];
+    const schemas = byStatus.get(AppErrorCode[code]) ?? [];
+    schemas.push(tErrorResponse(code, context));
+    byStatus.set(AppErrorCode[code], schemas);
+  }
+
+  const result: Record<number, TSchema> = {};
+  for (const [status, schemas] of byStatus) {
+    result[status] = schemas.length === 1 ? schemas[0] : t.Union(schemas);
+  }
+  return result as { [S in (typeof AppErrorCode)[C]]: TSchema };
 }

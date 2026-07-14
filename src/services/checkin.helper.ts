@@ -1,21 +1,12 @@
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@src/db";
 import { entries, registrations, students, type NewEntry } from "@src/db/schema";
-import type { AppErrorCode } from "@src/utils";
+import { AppError } from "@src/utils";
 
 /**
  * Shared logic for "staff scans student" flows, used by both
  * RpkmService and FirstDateService. Not called directly by routes.
  */
-
-export class CheckinError extends Error {
-  constructor(
-    public code: AppErrorCode,
-    public context?: Record<string, unknown>
-  ) {
-    super(code);
-  }
-}
 
 type CheckinProject = "rpkm" | "freshmennight" | "firstdate" | "walkrally";
 
@@ -34,7 +25,7 @@ const STAFF_GATE: Record<
 
 /**
  * @desc Resolves the `students` row for a CUNET id, and asserts that the student is staff
- * @throws {CheckinError} FORBIDDEN_NOT_STAFF
+ * @throws {AppError} FORBIDDEN_NOT_STAFF
  */
 export async function assertStaffForProject(
   params: { staffCunetId: string; project: CheckinProject },
@@ -44,7 +35,7 @@ export async function assertStaffForProject(
   const { db } = deps;
 
   const [staff] = await db.select().from(students).where(eq(students.studentId, staffCunetId));
-  if (!staff || staff.role !== "staff") throw new CheckinError("FORBIDDEN_NOT_STAFF");
+  if (!staff || staff.role !== "staff") throw new AppError("FORBIDDEN_NOT_STAFF");
 
   const gate = STAFF_GATE[project];
   const [staffReg] = await db
@@ -56,8 +47,7 @@ export async function assertStaffForProject(
         eq(registrations.project, gate.registrationsProject)
       )
     );
-  if (!staffReg || staffReg.staffRole !== gate.staffRole)
-    throw new CheckinError("FORBIDDEN_NOT_STAFF");
+  if (!staffReg || staffReg.staffRole !== gate.staffRole) throw new AppError("FORBIDDEN_NOT_STAFF");
 
   return staff;
 }
@@ -74,7 +64,7 @@ export async function checkinStudent(
   const { db } = deps;
 
   const [student] = await db.select().from(students).where(eq(students.studentId, studentCunetId));
-  if (!student) throw new CheckinError("STUDENT_NOT_FOUND");
+  if (!student) throw new AppError("STUDENT_NOT_FOUND");
 
   const staff = await assertStaffForProject({ staffCunetId, project }, deps);
 
@@ -92,7 +82,7 @@ export async function checkinStudent(
       .from(entries)
       .where(and(eq(entries.studentId, student.id), eq(entries.project, project)));
 
-    throw new CheckinError("ALREADY_CHECKED_IN", {
+    throw new AppError("ALREADY_CHECKED_IN", {
       scannedAt: existing.scannedAt,
       scannedBy: existing.scannedBy
     });

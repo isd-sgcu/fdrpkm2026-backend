@@ -12,8 +12,7 @@ import {
   type GroupHouseChoice,
   type Student
 } from "@src/db/schema";
-import type { AppErrorCode } from "@src/utils";
-import { isFreshman } from "@src/utils";
+import { AppError, isFreshman } from "@src/utils";
 import { isEventPassed } from "@src/utils/flags";
 
 export type GroupsDeps = { db?: Database };
@@ -28,18 +27,12 @@ type GroupMember = {
 
 type GroupWithMembers = Group & { members: GroupMember[] };
 
-class GroupsServiceError extends Error {
-  constructor(public code: AppErrorCode) {
-    super(code);
-  }
-}
-
 // --- Helpers (private) ---
 
 /**
  * Resolves the `students` row for a CUNET id.
  * @param studentId CUNET id, as derived by authMiddleware from the session email
- * @throws {GroupsServiceError} NOT_FOUND if no `students` row matches
+ * @throws {AppError} NOT_FOUND if no `students` row matches
  */
 const resolveCurrentStudent = async (
   studentId: string,
@@ -47,7 +40,7 @@ const resolveCurrentStudent = async (
 ): Promise<Student> => {
   const database = deps.db ?? defaultDb;
   const [student] = await database.select().from(students).where(eq(students.studentId, studentId));
-  if (!student) throw new GroupsServiceError("NOT_FOUND");
+  if (!student) throw new AppError("NOT_FOUND");
   return student;
 };
 
@@ -86,7 +79,7 @@ const getGroupWithMembers = async (
 /**
  * The student's rpkm registration — always exactly one once they've registered.
  * @param studentId `students.id` (uuid), not the CUNET id
- * @throws {GroupsServiceError} NOT_FOUND if the student has no rpkm registration yet
+ * @throws {AppError} NOT_FOUND if the student has no rpkm registration yet
  */
 const getCurrentRegistration = async (studentId: string, deps: GroupsDeps = {}) => {
   const database = deps.db ?? defaultDb;
@@ -94,7 +87,7 @@ const getCurrentRegistration = async (studentId: string, deps: GroupsDeps = {}) 
     .select()
     .from(registrations)
     .where(and(eq(registrations.studentId, studentId), eq(registrations.project, "rpkm")));
-  if (!registration) throw new GroupsServiceError("NOT_FOUND");
+  if (!registration) throw new AppError("NOT_FOUND");
   return registration;
 };
 
@@ -102,16 +95,16 @@ const getCurrentRegistration = async (studentId: string, deps: GroupsDeps = {}) 
  * Resolves student -> their rpkm registration -> the group it points to.
  * Shared by every endpoint that acts on "the caller's current group".
  * @param studentId CUNET id (from authMiddleware)
- * @throws {GroupsServiceError} NOT_FOUND if the student, their registration, or their group can't be resolved
+ * @throws {AppError} NOT_FOUND if the student, their registration, or their group can't be resolved
  */
 const getCurrentGroup = async (studentId: string, deps: GroupsDeps = {}) => {
   const database = deps.db ?? defaultDb;
   const student = await resolveCurrentStudent(studentId, deps);
   const registration = await getCurrentRegistration(student.id, deps);
-  if (!registration.groupId) throw new GroupsServiceError("NOT_FOUND");
+  if (!registration.groupId) throw new AppError("NOT_FOUND");
 
   const [group] = await database.select().from(groups).where(eq(groups.id, registration.groupId));
-  if (!group) throw new GroupsServiceError("NOT_FOUND");
+  if (!group) throw new AppError("NOT_FOUND");
 
   return { student, registration, group };
 };
@@ -122,7 +115,7 @@ const getCurrentGroup = async (studentId: string, deps: GroupsDeps = {}) => {
  * Move the caller from their current group into the group identified by `joinCode`.
  * @param studentId CUNET id of the student joining (from authMiddleware)
  * @param joinCode 6-digit code identifying the target group
- * @throws {GroupsServiceError} NOT_FRESHMEN, INVALID_JOIN_CODE, LEADER_HAS_MEMBERS, GROUP_FULL, or ALREADY_CONFIRMED
+ * @throws {AppError} NOT_FRESHMEN, INVALID_JOIN_CODE, LEADER_HAS_MEMBERS, GROUP_FULL, or ALREADY_CONFIRMED
  */
 const join = async (
   studentId: string,
@@ -130,12 +123,12 @@ const join = async (
   deps: GroupsDeps = {}
 ): Promise<GroupWithMembers> => {
   const database = deps.db ?? defaultDb;
-  if (!isFreshman(studentId)) throw new GroupsServiceError("NOT_FRESHMEN");
+  if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
   const student = await resolveCurrentStudent(studentId, deps);
 
   const [targetGroup] = await database.select().from(groups).where(eq(groups.joinCode, joinCode));
-  if (!targetGroup) throw new GroupsServiceError("INVALID_JOIN_CODE");
-  if (targetGroup.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
+  if (!targetGroup) throw new AppError("INVALID_JOIN_CODE");
+  if (targetGroup.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
 
   const registration = await getCurrentRegistration(student.id, deps);
   const oldGroupId = registration.groupId;
@@ -145,16 +138,16 @@ const join = async (
 
   if (oldGroupId) {
     const [oldGroup] = await database.select().from(groups).where(eq(groups.id, oldGroupId));
-    if (oldGroup?.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
+    if (oldGroup?.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
     if (oldGroup && oldGroup.leaderId === student.id) {
       const oldMembers = await getGroupMembers(oldGroup, deps);
       // a solo leader (no one else yet) may still hop groups; only blocked once someone's joined them.
-      if (oldMembers.length > 1) throw new GroupsServiceError("LEADER_HAS_MEMBERS");
+      if (oldMembers.length > 1) throw new AppError("LEADER_HAS_MEMBERS");
     }
   }
 
   const targetMembers = await getGroupMembers(targetGroup, deps);
-  if (targetMembers.length >= 4) throw new GroupsServiceError("GROUP_FULL");
+  if (targetMembers.length >= 4) throw new AppError("GROUP_FULL");
 
   await database.transaction(async (tx) => {
     await tx
@@ -178,7 +171,7 @@ const join = async (
 /**
  * Current group + members for the logged-in student.
  * @param studentId CUNET id (from authMiddleware)
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
+ * @throws {AppError} NOT_FOUND if the student or their group can't be resolved
  */
 const getMyGroup = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWithMembers> => {
   const { group } = await getCurrentGroup(studentId, deps);
@@ -188,7 +181,7 @@ const getMyGroup = async (studentId: string, deps: GroupsDeps = {}): Promise<Gro
 /**
  * The caller's group's ranked house choices, most preferred (rank 1) first.
  * @param studentId CUNET id (from authMiddleware)
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved
+ * @throws {AppError} NOT_FOUND if the student or their group can't be resolved
  */
 const getHousePreferences = async (
   studentId: string,
@@ -209,7 +202,7 @@ const getHousePreferences = async (
  * Replace the caller's group's whole ranked house-choice set. Leader-only.
  * @param studentId CUNET id (from authMiddleware)
  * @param houseIds ranked house ids, most preferred first (rank = index + 1)
- * @throws {GroupsServiceError} NOT_FOUND if the student/group/a houseId can't be resolved,
+ * @throws {AppError} NOT_FOUND if the student/group/a houseId can't be resolved,
  *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the group already confirmed
  *   or the house-pick deadline has passed, BAD_REQUEST if houseIds has duplicates
  */
@@ -220,14 +213,14 @@ const setHousePreferences = async (
 ): Promise<{ housePreferences: GroupHouseChoice[] }> => {
   const database = deps.db ?? defaultDb;
   const { student, group } = await getCurrentGroup(studentId, deps);
-  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
+  if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
   if (group.confirmedAt || isEventPassed("rpkm_house_pick"))
-    throw new GroupsServiceError("HOUSE_PICK_CLOSED");
-  if (houseIds.length < 1 || houseIds.length > 5) throw new GroupsServiceError("BAD_REQUEST");
-  if (new Set(houseIds).size !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
+    throw new AppError("HOUSE_PICK_CLOSED");
+  if (houseIds.length < 1 || houseIds.length > 5) throw new AppError("BAD_REQUEST");
+  if (new Set(houseIds).size !== houseIds.length) throw new AppError("BAD_REQUEST");
 
   const existingHouses = await database.select().from(houses).where(inArray(houses.id, houseIds));
-  if (existingHouses.length !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
+  if (existingHouses.length !== houseIds.length) throw new AppError("BAD_REQUEST");
 
   return database.transaction(async (tx) => {
     await tx.delete(groupHouseChoices).where(eq(groupHouseChoices.groupId, group.id));
@@ -245,14 +238,14 @@ const setHousePreferences = async (
  * Regenerate the caller's group's join code. Leader-only.
  * @param studentId CUNET id (from authMiddleware)
  * @returns the new join code
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved,
+ * @throws {AppError} NOT_FOUND if the student or their group can't be resolved,
  *   NOT_LEADER if not the group's leader, ALREADY_CONFIRMED if the group is already confirmed
  */
 const regenerateJoinCode = async (studentId: string, deps: GroupsDeps = {}): Promise<string> => {
   const database = deps.db ?? defaultDb;
   const { student, group } = await getCurrentGroup(studentId, deps);
-  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
-  if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
+  if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
+  if (group.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
 
   for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
     const joinCode = generateJoinCode();
@@ -265,7 +258,7 @@ const regenerateJoinCode = async (studentId: string, deps: GroupsDeps = {}): Pro
       return joinCode;
     }
   }
-  throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
+  throw new AppError("INTERNAL_SERVER_ERROR");
 };
 
 /**
@@ -274,13 +267,13 @@ const regenerateJoinCode = async (studentId: string, deps: GroupsDeps = {}): Pro
  * member also gets their own fresh solo group.
  * @param studentId CUNET id of the student leaving (from authMiddleware)
  * @returns the caller's new solo group
- * @throws {GroupsServiceError} NOT_FOUND if the student or their group can't be resolved,
+ * @throws {AppError} NOT_FOUND if the student or their group can't be resolved,
  *   ALREADY_CONFIRMED if the group is already confirmed
  */
 const leave = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWithMembers> => {
   const database = deps.db ?? defaultDb;
   const { student, registration, group: oldGroup } = await getCurrentGroup(studentId, deps);
-  if (oldGroup.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
+  if (oldGroup.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
 
   const isLeader = oldGroup.leaderId === student.id;
   const oldMembers = await getGroupMembers(oldGroup, deps);
@@ -295,7 +288,7 @@ const leave = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWit
           .returning();
         if (group) return group;
       }
-      throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
+      throw new AppError("INTERNAL_SERVER_ERROR");
     };
 
     const newGroup = await createSoloGroup(student.id);
@@ -331,7 +324,7 @@ const leave = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWit
  * Kick a member out of the caller's group into their own fresh solo group. Leader-only.
  * @param studentId CUNET id of the leader (from authMiddleware)
  * @param targetUserId `students.id` (uuid) of the member to kick
- * @throws {GroupsServiceError} NOT_FOUND if the student, group, or target member can't be
+ * @throws {AppError} NOT_FOUND if the student, group, or target member can't be
  *   resolved; NOT_LEADER if the caller isn't the group's leader; ALREADY_CONFIRMED if the
  *   group is already confirmed; BAD_REQUEST if the caller targets themselves (use leave instead)
  */
@@ -342,9 +335,9 @@ const kickMember = async (
 ): Promise<GroupWithMembers> => {
   const database = deps.db ?? defaultDb;
   const { student, group } = await getCurrentGroup(studentId, deps);
-  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
-  if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
-  if (targetUserId === student.id) throw new GroupsServiceError("BAD_REQUEST");
+  if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
+  if (group.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
+  if (targetUserId === student.id) throw new AppError("BAD_REQUEST");
 
   const [targetRegistration] = await database
     .select()
@@ -356,7 +349,7 @@ const kickMember = async (
         eq(registrations.groupId, group.id)
       )
     );
-  if (!targetRegistration) throw new GroupsServiceError("NOT_FOUND");
+  if (!targetRegistration) throw new AppError("NOT_FOUND");
 
   await database.transaction(async (tx) => {
     let newGroup;
@@ -371,7 +364,7 @@ const kickMember = async (
         break;
       }
     }
-    if (!newGroup) throw new GroupsServiceError("INTERNAL_SERVER_ERROR");
+    if (!newGroup) throw new AppError("INTERNAL_SERVER_ERROR");
     await tx
       .update(registrations)
       .set({ groupId: newGroup.id })
@@ -387,7 +380,7 @@ const kickMember = async (
  * if somehow more than 5 are set. Locks house-preferences and membership
  * changes for the group afterward.
  * @param studentId CUNET id (from authMiddleware)
- * @throws {GroupsServiceError} NOT_FRESHMEN, NOT_FOUND if the student or their group can't
+ * @throws {AppError} NOT_FRESHMEN, NOT_FOUND if the student or their group can't
  *   be resolved, NOT_LEADER, ALREADY_CONFIRMED, or TOO_MANY_HOUSE_PREFS
  */
 const confirmGroup = async (
@@ -395,17 +388,17 @@ const confirmGroup = async (
   deps: GroupsDeps = {}
 ): Promise<{ confirmedAt: Date }> => {
   const database = deps.db ?? defaultDb;
-  if (!isFreshman(studentId)) throw new GroupsServiceError("NOT_FRESHMEN");
+  if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
   const { student, group } = await getCurrentGroup(studentId, deps);
-  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
-  if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
+  if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
+  if (group.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
 
   const preferences = await database
     .select()
     .from(groupHouseChoices)
     .where(eq(groupHouseChoices.groupId, group.id));
-  if (preferences.length < 1) throw new GroupsServiceError("HOUSE_PREF_INCOMPLETE");
-  if (preferences.length > 5) throw new GroupsServiceError("TOO_MANY_HOUSE_PREFS");
+  if (preferences.length < 1) throw new AppError("HOUSE_PREF_INCOMPLETE");
+  if (preferences.length > 5) throw new AppError("TOO_MANY_HOUSE_PREFS");
 
   const confirmedAt = new Date();
   await database.update(groups).set({ confirmedAt }).where(eq(groups.id, group.id));
@@ -416,7 +409,6 @@ const confirmGroup = async (
 // importing individual functions. Order matches the routes in
 // src/routes/rpkm/groups.ts, plus confirmGroup for POST /rpkm/houses/confirm.
 export const GroupsService = {
-  GroupsServiceError,
   join,
   getMyGroup,
   getHousePreferences,

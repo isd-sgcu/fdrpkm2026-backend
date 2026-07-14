@@ -1,4 +1,4 @@
-import type { AppErrorCode } from "@src/utils";
+import { AppError } from "@src/utils";
 
 /**
  * "Model" layer for MVC — owns data access + business rules for a feature.
@@ -17,16 +17,11 @@ export type ExampleUser = {
 
 const store = new Map<string, ExampleUser>();
 
-/** Thrown on expected business failures; controller maps `code` to an HTTP status. */
-class ExampleServiceError extends Error {
-  constructor(public code: AppErrorCode) {
-    super(code);
-  }
-}
-
 const getExampleUser = (id: string): ExampleUser => {
   const user = store.get(id);
-  if (!user) throw new ExampleServiceError("NOT_FOUND");
+  // Expected business failure — the global onError handler (src/app.ts) maps
+  // the code to its HTTP status and the standard error envelope.
+  if (!user) throw new AppError("NOT_FOUND");
 
   return user;
 };
@@ -39,14 +34,13 @@ const upsertExampleUser = (input: ExampleUser): ExampleUser => {
 
 const deleteExampleUser = (id: string): void => {
   // eslint-disable-next-line drizzle/enforce-delete-with-where -- Map.delete, not a Drizzle query; rule can't tell the two apart
-  if (!store.delete(id)) throw new ExampleServiceError("NOT_FOUND");
+  if (!store.delete(id)) throw new AppError("NOT_FOUND");
 };
 
 // Namespace object — routes call `ExampleService.getExampleUser(...)` instead
 // of importing individual functions, so every feature's service is reached
 // through one consistent name (mirrors ExampleModel/FirstDateService/HousesService).
 export const ExampleService = {
-  ExampleServiceError,
   getExampleUser,
   upsertExampleUser,
   deleteExampleUser
