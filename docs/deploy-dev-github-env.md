@@ -22,7 +22,7 @@ Add these under `Environment variables`.
 | `CLOUD_SQL_CONNECTION_NAME`         | Cloud SQL connection name in `PROJECT:REGION:INSTANCE` format.                                                                     |
 | `CLOUD_RUN_HEALTH_PATH`             | Use `/v1/health/ready`; this gates promotion on database connectivity.                                                             |
 | `ALLOW_DEV_DEPLOY_HEALTH_FAILURE`   | Optional temporary bypass. Set to `true` only to stop promoted health-check failures from failing the dev workflow after rollback. |
-| `BETTER_AUTH_URL`                   | Canonical dev API fallback URL: `https://staging-rpkm-api.rpkm2026.com`.                                                           |
+| `BETTER_AUTH_URL`                   | Canonical dev API fallback URL: `https://api-staging.rpkm2026.com`.                                                                |
 | `GOOGLE_CLIENT_ID`                  | Google OAuth client ID.                                                                                                            |
 | `S3_ENDPOINT`                       | S3-compatible endpoint, for example Cloudflare R2.                                                                                 |
 | `S3_REGION`                         | Use `auto` for Cloudflare R2 unless your provider needs another region.                                                            |

@@ -2,15 +2,15 @@
 
 One backend for **CU First Date 2026** and **รับเพื่อนก้าวใหม่ 2569**. Elysia + Bun + TypeScript, with a shared Drizzle/Postgres database. Merged from the former `firstdate2026-backend` and `rpkm2026-backend`.
 
-## Two frontends, one backend, two API hosts
+## Two frontends, one backend, one API host
 
 ```
-FD frontend   -> fd-api.rpkm2026.com   --\
-                                          >-- fdrpkm2026-backend -- shared Postgres
-RPKM frontend -> rpkm-api.rpkm2026.com --/
+FD frontend   -> api.rpkm2026.com/v1/fd   --\
+                                             >-- fdrpkm2026-backend -- shared Postgres
+RPKM frontend -> api.rpkm2026.com/v1/rpkm --/
 ```
 
-Project context comes from the **Host header** (`fd-api.*` = firstdate, `rpkm-api.*` = rpkm) — see `src/routes/auth`. Chula SSO carries no custom data; the return URL is built from whichever host was hit.
+One shared host, path-namespaced per project: `api.rpkm2026.com/v1/(fd|rpkm|auth|user)`. Project context comes from the **path prefix** (`/v1/fd` = firstdate, `/v1/rpkm` = rpkm) — see `src/routes`. Auth is shared across both projects under `/v1/auth`.
 
 ## Prerequisites
 
@@ -100,7 +100,7 @@ src/
   routes/
     index.ts        mounts everything under /v1
     health.ts       GET /v1/health
-    auth/           Chula SSO login + callback (project from Host header)
+    auth/           Chula SSO login + callback (shared across projects)
     firstdate/      project=firstdate routes
     rpkm/           project=rpkm routes
   db/

@@ -7,6 +7,8 @@ import { db } from "@src/db";
 import { env } from "@src/config";
 import * as schema from "@src/db/schema";
 
+const authProtocol = env.BETTER_AUTH_URL.startsWith("https://") ? "https" : "http";
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -25,18 +27,12 @@ export const auth = betterAuth({
   },
   secret: env.BETTER_AUTH_SECRET || "",
   baseURL: {
-    // This backend answers on two API hosts (one per frontend, see README's
-    // "Two frontends, one backend, two API hosts") — allowlist both so
-    // Better Auth accepts whichever `x-forwarded-host`/`Host` the request
-    // actually arrived on, instead of only the single `BETTER_AUTH_URL` host.
-    allowedHosts: [
-      "fd-api.rpkm2026.com",
-      "rpkm-api.rpkm2026.com",
-      ...(env.NODE_ENV !== "production"
-        ? ["staging-fd-api.rpkm2026.com", "staging-rpkm-api.rpkm2026.com", "localhost:*"]
-        : [])
-    ],
-    protocol: env.NODE_ENV !== "production" ? "http" : "https",
+    // Single shared API host (see README's "Two frontends, one backend,
+    // one API host") — Better Auth checks the request's
+    // `x-forwarded-host`/`Host` against this allowlist.
+    allowedHosts: ["*.rpkm2026.com", ...(env.NODE_ENV !== "production" ? ["localhost:*"] : [])],
+    // Staging runs in development mode but still has an HTTPS public URL.
+    protocol: authProtocol,
     // Direct auth.api calls with no request context (e.g. generateOpenAPISchema
     // at app startup) need a resolvable baseURL. Fall back to localhost outside
     // production when BETTER_AUTH_URL is unset (e.g. `bun test` with no .env);
@@ -44,8 +40,8 @@ export const auth = betterAuth({
     fallback:
       env.BETTER_AUTH_URL || (env.NODE_ENV !== "production" ? "http://localhost:3000" : undefined)
   },
-  // Public endpoint is https://[staging-]<fd|rpkm>-api.rpkm2026.com/v1/auth/*
-  // — keep in sync with apiRoutes' "/v1" prefix in src/routes/index.ts.
+  // Public endpoint is https://api.rpkm2026.com/v1/auth/* — keep in sync with
+  // apiRoutes' "/v1" prefix in src/routes/index.ts.
   basePath: "/v1/auth",
   // Both frontends call this shared backend cross-origin — required for
   // cookie-mode sessions to pass Better Auth's origin/CSRF check. Dev/preview

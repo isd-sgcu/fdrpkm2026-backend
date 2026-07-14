@@ -86,6 +86,7 @@ jobs:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
         run: |
           required=(
             GCP_PROJECT_ID
@@ -98,6 +99,7 @@ jobs:
             GCP_SERVICE_ACCOUNT
             DATABASE_URL
             BETTER_AUTH_SECRET
+            BETTER_AUTH_URL
           )
 
           for name in "${required[@]}"; do
