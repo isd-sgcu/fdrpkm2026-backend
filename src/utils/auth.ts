@@ -22,7 +22,7 @@ export const auth = betterAuth({
       // Restricts Google sign-in to the chula.ac.th Workspace domain: sent
       // as the `hd` authorization hint and re-checked against the returned
       // id token's `hd` claim (personal @gmail.com accounts are rejected).
-      hd: "chula.ac.th"
+      hd: "student.chula.ac.th"
     }
   },
   secret: env.BETTER_AUTH_SECRET || "",
