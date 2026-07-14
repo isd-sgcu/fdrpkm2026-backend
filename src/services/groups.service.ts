@@ -202,9 +202,9 @@ const getHousePreferences = async (
  * Replace the caller's group's whole ranked house-choice set. Leader-only.
  * @param studentId CUNET id (from authMiddleware)
  * @param houseIds ranked house ids, most preferred first (rank = index + 1)
- * @throws {AppError} NOT_FOUND if the student/group/a houseId can't be resolved,
+ * @throws {AppError} NOT_FOUND if the student/group can't be resolved,
  *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the group already confirmed
- *   or the house-pick deadline has passed, BAD_REQUEST if houseIds has duplicates
+ *   or the house-pick deadline has passed, BAD_REQUEST if a houseId doesn't exist
  */
 const setHousePreferences = async (
   studentId: string,
@@ -216,9 +216,8 @@ const setHousePreferences = async (
   if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
   if (group.confirmedAt || isEventPassed("rpkm_house_pick"))
     throw new AppError("HOUSE_PICK_CLOSED");
-  if (houseIds.length < 1 || houseIds.length > 5) throw new AppError("BAD_REQUEST");
-  if (new Set(houseIds).size !== houseIds.length) throw new AppError("BAD_REQUEST");
-
+  // Count (1..5) and uniqueness are enforced by the route body schema
+  // (Groups.HousePreferencesBody); only the DB-existence check lives here.
   const existingHouses = await database.select().from(houses).where(inArray(houses.id, houseIds));
   if (existingHouses.length !== houseIds.length) throw new AppError("BAD_REQUEST");
 

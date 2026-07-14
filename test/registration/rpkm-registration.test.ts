@@ -197,36 +197,8 @@ describe("registerRpkm — travel legs", () => {
   });
 });
 
-describe("registerRpkm — validation", () => {
-  it("rejects when pdpaConsent is not true (PDPA_REQUIRED)", async () => {
-    await expect(
-      registerRpkm(authUser(), validInput({ pdpaConsent: false }), injected())
-    ).rejects.toMatchObject({ code: "PDPA_REQUIRED" });
-    expect(await db.select().from(schema.students)).toHaveLength(0);
-  });
-
-  it("rejects zero travel legs", async () => {
-    await expect(
-      registerRpkm(authUser(), { pdpaConsent: true, travelLegs: [] }, injected())
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("rejects more than 4 travel legs", async () => {
-    await expect(
-      registerRpkm(
-        authUser(),
-        validInput({ travelLegs: [leg(), leg(), leg(), leg(), leg()] }),
-        injected()
-      )
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("rejects vehicle 'other' without vehicleOther", async () => {
-    await expect(
-      registerRpkm(authUser(), validInput({ travelLegs: [leg({ vehicle: "other" })] }), injected())
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-});
+// Body-shape validation (pdpaConsent, leg count, vehicleOther) moved to the
+// route body schema — see registration-body.test.ts.
 
 describe("registerRpkm — insert-only (no duplicate registration)", () => {
   it("rejects a second registration for the same project (ALREADY_REGISTERED)", async () => {

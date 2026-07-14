@@ -59,8 +59,6 @@ export const AppErrorCode = {
   NOT_LEADER: 403,
   /** 403: scan location is outside the checkpoint's geofence radius. */
   OUT_OF_GEOFENCE: 403,
-  /** 400: PDPA consent is required but was not given. */
-  PDPA_REQUIRED: 400,
   /** 403: house results haven't been announced yet. */
   RESULT_NOT_ANNOUNCED: 403,
   /** 404: student_id from QR does not match any student. */

@@ -28,14 +28,7 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
       body: "RpkmUser.RegistrationBody",
       response: {
         200: tSuccessResponse(RpkmRegistrationModel.models.registrationResult.Schema()),
-        ...tAppErrors(
-          "BAD_REQUEST",
-          "PDPA_REQUIRED",
-          "UNAUTHORIZED",
-          "NOT_FRESHMEN",
-          "ALREADY_REGISTERED",
-          "INTERNAL_SERVER_ERROR"
-        )
+        ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN", "ALREADY_REGISTERED", "INTERNAL_SERVER_ERROR")
       }
     }
   )
@@ -63,7 +56,7 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
       body: "RpkmUser.UpdateProfileBody",
       response: {
         200: tSuccessResponse(RpkmRegistrationModel.models.profileResult.Schema()),
-        ...tAppErrors("BAD_REQUEST", "UNAUTHORIZED", "NOT_FOUND")
+        ...tAppErrors("UNAUTHORIZED", "NOT_FOUND")
       }
     }
   );
