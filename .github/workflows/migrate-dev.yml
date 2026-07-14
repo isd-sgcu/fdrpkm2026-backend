@@ -1,0 +1,251 @@
+name: Migrate Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Database environment to migrate"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      confirm:
+        description: "Type MIGRATE_DEV or MIGRATE_PROD"
+        required: true
+        type: string
+
+# Keep base permissions minimal. The migration job grants id-token only for
+# Workload Identity Federation authentication.
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-${{ inputs.target }}-db
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply ${{ inputs.target }} DB Migrations
+    runs-on: ubuntu-latest
+    # Use one migration environment. Only the selected database URL is exposed
+    # to this job; dev and prod credentials remain separate secrets.
+    environment: migration-dev
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      CLOUD_SQL_INSTANCE_NAME: ${{ vars.CLOUD_SQL_INSTANCE_NAME }}
+      CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
+      CLOUD_SQL_BACKUP_RETENTION_DAYS: ${{ vars.CLOUD_SQL_BACKUP_RETENTION_DAYS || '7' }}
+
+    steps:
+      - name: Validate manual confirmation
+        run: |
+          EXPECTED="MIGRATE_${{ inputs.target }}"
+          EXPECTED="$(echo "$EXPECTED" | tr '[:lower:]' '[:upper:]')"
+
+          if [ "${{ inputs.confirm }}" != "$EXPECTED" ]; then
+            echo "::error::Confirmation failed. Expected: ${EXPECTED}"
+            exit 1
+          fi
+
+          if ! [[ "${CLOUD_SQL_BACKUP_RETENTION_DAYS}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::CLOUD_SQL_BACKUP_RETENTION_DAYS must be a positive integer."
+            exit 1
+          fi
+
+          for name in GCP_PROJECT_ID CLOUD_SQL_INSTANCE_NAME CLOUD_SQL_CONNECTION_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required migration configuration is missing: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Select dev database configuration
+        if: inputs.target == 'dev'
+        env:
+          SELECTED_DATABASE_URL: ${{ secrets.DATABASE_URL_DEV }}
+        run: |
+          if [ -z "${SELECTED_DATABASE_URL}" ]; then
+            echo "::error::DATABASE_URL_DEV is not configured in the migration-dev environment."
+            exit 1
+          fi
+
+          echo "::add-mask::${SELECTED_DATABASE_URL}"
+          printf 'DATABASE_URL=%s\n' "${SELECTED_DATABASE_URL}" >> "$GITHUB_ENV"
+
+      - name: Select prod database configuration
+        if: inputs.target == 'prod'
+        env:
+          SELECTED_DATABASE_URL: ${{ secrets.DATABASE_URL_PROD }}
+        run: |
+          if [ -z "${SELECTED_DATABASE_URL}" ]; then
+            echo "::error::DATABASE_URL_PROD is not configured in the migration-dev environment."
+            exit 1
+          fi
+
+          echo "::add-mask::${SELECTED_DATABASE_URL}"
+          printf 'DATABASE_URL=%s\n' "${SELECTED_DATABASE_URL}" >> "$GITHUB_ENV"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install Cloud SQL Auth Proxy
+        run: |
+          curl -fsSL -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.1/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+
+      - name: Create Cloud SQL backup before migration
+        id: backup
+        run: |
+          BACKUP_DESCRIPTION="github-actions-${{ inputs.target }}-migration-${GITHUB_SHA}-${GITHUB_RUN_ID}"
+
+          gcloud sql backups create \
+            --project "${GCP_PROJECT_ID}" \
+            --instance "${CLOUD_SQL_INSTANCE_NAME}" \
+            --description "${BACKUP_DESCRIPTION}" \
+            --quiet
+
+          BACKUP_ID="$(gcloud sql backups list \
+            --project "${GCP_PROJECT_ID}" \
+            --instance "${CLOUD_SQL_INSTANCE_NAME}" \
+            --filter="description=${BACKUP_DESCRIPTION}" \
+            --sort-by="~windowStartTime" \
+            --limit=1 \
+            --format="value(id)")"
+
+          if [ -z "$BACKUP_ID" ]; then
+            echo "::error::Backup was requested, but backup ID could not be found. Refusing to migrate."
+            exit 1
+          fi
+
+          echo "backup_id=${BACKUP_ID}" >> "$GITHUB_OUTPUT"
+          echo "Created Cloud SQL backup ID: ${BACKUP_ID}"
+
+      - name: Start Cloud SQL Auth Proxy
+        run: |
+          nohup ./cloud-sql-proxy "${CLOUD_SQL_CONNECTION_NAME}" --port 5432 > cloud-sql-proxy.log 2>&1 &
+          echo $! > cloud-sql-proxy.pid
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+              echo "Cloud SQL Auth Proxy is ready."
+              exit 0
+            fi
+
+            echo "Waiting for Cloud SQL Auth Proxy..."
+            sleep 2
+          done
+
+          echo "::error::Cloud SQL Auth Proxy did not become ready."
+          cat cloud-sql-proxy.log || true
+          exit 1
+
+      - name: Verify database connection
+        run: |
+          psql "${DATABASE_URL}" \
+            -v ON_ERROR_STOP=1 \
+            -c "select current_database(), current_user;"
+
+      - name: Apply SQL migration files transactionally
+        id: migrate
+        run: |
+          for file in drizzle/*.sql; do
+            echo "Applying ${file}"
+            psql "${DATABASE_URL}" \
+              -v ON_ERROR_STOP=1 \
+              --single-transaction \
+              -f "${file}"
+          done
+
+          echo "completed=true" >> "$GITHUB_OUTPUT"
+
+      # On-demand Cloud SQL backups do not support a per-backup expiration.
+      # Delete only expired backups created by this workflow, after a successful migration.
+      - name: Delete expired migration backups
+        env:
+          CURRENT_BACKUP_ID: ${{ steps.backup.outputs.backup_id }}
+        run: |
+          BACKUP_PREFIX="github-actions-${{ inputs.target }}-migration-"
+          CUTOFF_EPOCH="$(date -u -d "${CLOUD_SQL_BACKUP_RETENTION_DAYS} days ago" +%s)"
+
+          gcloud sql backups list \
+            --project "${GCP_PROJECT_ID}" \
+            --instance "${CLOUD_SQL_INSTANCE_NAME}" \
+            --format=json |
+          jq -r --arg prefix "${BACKUP_PREFIX}" '
+            .[]
+            | select((.description // "") | startswith($prefix))
+            | [.id, (.endTime // .windowStartTime // .startTime // "")]
+            | @tsv
+          ' | while IFS=$'\t' read -r backup_id backup_time; do
+            if [ "${backup_id}" = "${CURRENT_BACKUP_ID}" ]; then
+              continue
+            fi
+
+            if ! backup_epoch="$(date -u -d "${backup_time}" +%s 2>/dev/null)"; then
+              echo "::warning::Skipping backup ${backup_id}: invalid start time '${backup_time}'."
+              continue
+            fi
+
+            if [ "${backup_epoch}" -lt "${CUTOFF_EPOCH}" ]; then
+              echo "Deleting expired migration backup ${backup_id} from ${backup_time}."
+              gcloud sql backups delete "${backup_id}" \
+                --project "${GCP_PROJECT_ID}" \
+                --instance "${CLOUD_SQL_INSTANCE_NAME}" \
+                --quiet
+            fi
+          done
+
+      - name: Migration success summary
+        run: |
+          echo "Migration completed successfully."
+          echo "Pre-migration Cloud SQL backup ID: ${{ steps.backup.outputs.backup_id }}"
+          echo "Migration backup retention: ${CLOUD_SQL_BACKUP_RETENTION_DAYS} days"
+
+      - name: Failure restore instructions
+        if: failure() && steps.migrate.outputs.completed != 'true'
+        run: |
+          echo "::error::Migration failed."
+          echo "Pre-migration backup ID: ${{ steps.backup.outputs.backup_id }}"
+          echo ""
+          echo "Manual restore command if you decide to roll back the whole Cloud SQL instance:"
+          echo "gcloud sql backups restore ${{ steps.backup.outputs.backup_id }} \\"
+          echo "  --project ${GCP_PROJECT_ID} \\"
+          echo "  --restore-instance ${CLOUD_SQL_INSTANCE_NAME} \\"
+          echo "  --backup-instance ${CLOUD_SQL_INSTANCE_NAME}"
+
+      - name: Post-migration failure notice
+        if: failure() && steps.migrate.outputs.completed == 'true'
+        run: |
+          echo "::error::SQL migration completed, but a post-migration step failed."
+          echo "Do not restore the database only because backup retention cleanup failed."
+          echo "Pre-migration backup ID: ${{ steps.backup.outputs.backup_id }}"
+
+      - name: Stop Cloud SQL Auth Proxy
+        if: always()
+        run: |
+          if [ -f cloud-sql-proxy.pid ]; then
+            kill "$(cat cloud-sql-proxy.pid)" || true
+          fi

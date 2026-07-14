@@ -1,0 +1,553 @@
+name: Deploy Prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DEPLOY_PROD to deploy main to production"
+        required: true
+        type: string
+
+# Keep the default token read-only. Only the deployment job can request the
+# OIDC token needed for Google Cloud Workload Identity Federation.
+permissions:
+  contents: read
+
+# Never cancel a production rollout midway through traffic changes or rollback.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  APP_NAME: fdrpkm2026-backend
+  CONTAINER_PORT: "8080"
+  IMAGE_TAG_SHA: ${{ github.sha }}
+  IMAGE_TAG_LATEST: prod-latest
+
+jobs:
+  validate:
+    name: Test and Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate production dispatch
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Production deployment must run from the main branch."
+            exit 1
+          fi
+
+          if [ "${CONFIRM}" != "DEPLOY_PROD" ]; then
+            echo "::error::Confirmation failed. Expected: DEPLOY_PROD"
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check formatting
+        run: bun run format:check
+
+      - name: Run lint
+        run: bun run lint
+
+      - name: Run type checks
+        run: bun run typecheck
+
+      - name: Run unit tests
+        run: bun test
+
+      - name: Build application locally
+        run: bun run build
+
+  deploy-prod:
+    name: Push Image and Deploy Prod
+    runs-on: ubuntu-latest
+    needs:
+      - validate
+    environment:
+      name: prod
+      url: ${{ steps.candidate.outputs.service_url }}
+    timeout-minutes: 45
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GAR_REPOSITORY: ${{ vars.GAR_REPOSITORY }}
+      CLOUD_RUN_SERVICE_PROD: ${{ vars.CLOUD_RUN_SERVICE_PROD }}
+      CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+      CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
+      CLOUD_RUN_MIN_INSTANCES: ${{ vars.CLOUD_RUN_MIN_INSTANCES || '0' }}
+      CLOUD_RUN_MAX_INSTANCES: ${{ vars.CLOUD_RUN_MAX_INSTANCES || '10' }}
+      CLOUD_RUN_CONCURRENCY: ${{ vars.CLOUD_RUN_CONCURRENCY || '20' }}
+      CLOUD_RUN_MEMORY: ${{ vars.CLOUD_RUN_MEMORY || '512Mi' }}
+      CLOUD_RUN_CPU: ${{ vars.CLOUD_RUN_CPU || '1' }}
+      HEALTH_PATH: ${{ vars.CLOUD_RUN_HEALTH_PATH || '/v1/health/ready' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate production configuration
+        env:
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+          BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+        run: |
+          required=(
+            GCP_PROJECT_ID
+            GCP_REGION
+            GAR_REPOSITORY
+            CLOUD_RUN_SERVICE_PROD
+            CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT
+            CLOUD_SQL_CONNECTION_NAME
+            GCP_WORKLOAD_IDENTITY_PROVIDER
+            GCP_SERVICE_ACCOUNT
+            DATABASE_URL
+            BETTER_AUTH_SECRET
+            BETTER_AUTH_URL
+            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET
+            S3_BUCKET
+            S3_ACCESS_KEY_ID
+            S3_SECRET_ACCESS_KEY
+          )
+
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required prod environment configuration is missing: ${name}"
+              exit 1
+            fi
+          done
+
+          if ! [[ "${CLOUD_RUN_MIN_INSTANCES}" =~ ^[0-9]+$ ]]; then
+            echo "::error::CLOUD_RUN_MIN_INSTANCES must be a non-negative integer."
+            exit 1
+          fi
+
+          for name in CLOUD_RUN_MAX_INSTANCES CLOUD_RUN_CONCURRENCY; do
+            if ! [[ "${!name}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::${name} must be a positive integer."
+              exit 1
+            fi
+          done
+
+          case "${CLOUD_RUN_CPU}" in
+            1|2|4|6|8) ;;
+            *)
+              echo "::error::CLOUD_RUN_CPU must be one of: 1, 2, 4, 6, 8."
+              exit 1
+              ;;
+          esac
+
+          if [ "${CLOUD_RUN_MIN_INSTANCES}" -gt "${CLOUD_RUN_MAX_INSTANCES}" ]; then
+            echo "::error::CLOUD_RUN_MIN_INSTANCES cannot exceed CLOUD_RUN_MAX_INSTANCES."
+            exit 1
+          fi
+
+          if [[ "${DATABASE_URL}" == *"@127.0.0.1"* ]] || [[ "${DATABASE_URL}" == *"@localhost"* ]]; then
+            echo "::error::DATABASE_URL must use the Cloud SQL Unix socket in Cloud Run, not a local proxy address."
+            exit 1
+          fi
+
+          if [[ "${DATABASE_URL}" != *"host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}"* ]]; then
+            echo "::error::DATABASE_URL must contain host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}."
+            exit 1
+          fi
+
+          if [[ "${BETTER_AUTH_URL}" != https://* ]]; then
+            echo "::error::BETTER_AUTH_URL must use HTTPS in production."
+            exit 1
+          fi
+
+          if [[ "${HEALTH_PATH}" != /* ]]; then
+            echo "::error::CLOUD_RUN_HEALTH_PATH must begin with /."
+            exit 1
+          fi
+
+          if ! [[ "${CLOUD_RUN_MEMORY}" =~ ^[1-9][0-9]*(Mi|Gi)$ ]]; then
+            echo "::error::CLOUD_RUN_MEMORY must use a value such as 512Mi or 1Gi."
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker auth for Artifact Registry
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Set image names
+        id: image
+        run: |
+          IMAGE_BASE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GAR_REPOSITORY}/${APP_NAME}"
+          echo "base=${IMAGE_BASE}" >> "$GITHUB_OUTPUT"
+          echo "sha=${IMAGE_BASE}:${IMAGE_TAG_SHA}" >> "$GITHUB_OUTPUT"
+          echo "latest=${IMAGE_BASE}:${IMAGE_TAG_LATEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Capture current Cloud Run traffic for rollback
+        id: previous-traffic
+        run: |
+          if ! gcloud run services describe "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            >/dev/null 2>&1; then
+            echo "::warning::This is the first production deployment. No previous revision is available for rollback."
+            echo "service_exists=false" >> "$GITHUB_OUTPUT"
+            echo "traffic=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "service_exists=true" >> "$GITHUB_OUTPUT"
+
+          TRAFFIC="$(gcloud run services describe "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --format=json \
+            | jq -r '[.status.traffic[] | select(.percent != null and .revisionName != null) | "\(.revisionName)=\(.percent)"] | unique | join(",")')"
+
+          if [ -z "${TRAFFIC}" ]; then
+            echo "::warning::No existing production traffic was found. Automatic rollback will be unavailable."
+          fi
+
+          echo "traffic=${TRAFFIC}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      # Push only the immutable SHA here. prod-latest is moved only after the
+      # revision passes both pre-traffic and post-promotion health checks.
+      - name: Build and push immutable Docker image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.sha }}
+          cache-from: type=gha,scope=prod
+          cache-to: type=gha,mode=max,scope=prod
+          provenance: mode=max
+          sbom: true
+
+      - name: Create protected Cloud Run environment file
+        env:
+          BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+          S3_REGION: ${{ vars.S3_REGION || 'auto' }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          ASSET_BASE_URL: ${{ vars.ASSET_BASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+        run: |
+          # JSON is valid YAML and lets jq safely escape arbitrary secret values.
+          CLOUD_RUN_ENV_FILE="${RUNNER_TEMP}/cloud-run-prod-env-${GITHUB_RUN_ID}.yaml"
+
+          jq -n '
+            {
+              NODE_ENV: "production",
+              BETTER_AUTH_URL: env.BETTER_AUTH_URL,
+              GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
+              S3_ENDPOINT: env.S3_ENDPOINT,
+              S3_REGION: env.S3_REGION,
+              S3_BUCKET: env.S3_BUCKET,
+              ASSET_BASE_URL: env.ASSET_BASE_URL,
+              DATABASE_URL: env.DATABASE_URL,
+              BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
+              GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET,
+              S3_ACCESS_KEY_ID: env.S3_ACCESS_KEY_ID,
+              S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY
+            }' > "${CLOUD_RUN_ENV_FILE}"
+
+          chmod 600 "${CLOUD_RUN_ENV_FILE}"
+          echo "CLOUD_RUN_ENV_FILE=${CLOUD_RUN_ENV_FILE}" >> "$GITHUB_ENV"
+
+      - name: Deploy SHA image as production candidate
+        run: |
+          run_deploy() {
+            local use_no_traffic="$1"
+            local args=(
+              gcloud run deploy "${CLOUD_RUN_SERVICE_PROD}"
+              --project "${GCP_PROJECT_ID}"
+              --region "${GCP_REGION}"
+              --image "${{ steps.image.outputs.sha }}"
+              --platform managed
+              --port "${CONTAINER_PORT}"
+              --tag "candidate"
+              --allow-unauthenticated
+              --service-account "${CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT}"
+              --set-cloudsql-instances "${CLOUD_SQL_CONNECTION_NAME}"
+              --execution-environment gen2
+              --min-instances "${CLOUD_RUN_MIN_INSTANCES}"
+              --max-instances "${CLOUD_RUN_MAX_INSTANCES}"
+              --concurrency "${CLOUD_RUN_CONCURRENCY}"
+              --memory "${CLOUD_RUN_MEMORY}"
+              --cpu "${CLOUD_RUN_CPU}"
+              --cpu-throttling
+              --cpu-boost
+              --startup-probe "httpGet.path=/v1/health,httpGet.port=${CONTAINER_PORT},initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=5,failureThreshold=12"
+              --liveness-probe "httpGet.path=/v1/health,httpGet.port=${CONTAINER_PORT},initialDelaySeconds=10,timeoutSeconds=3,periodSeconds=30,failureThreshold=3"
+              --env-vars-file "${CLOUD_RUN_ENV_FILE}"
+              --timeout 300s
+              --quiet
+            )
+
+            if [ "${use_no_traffic}" = "true" ]; then
+              args+=(--no-traffic)
+            fi
+
+            "${args[@]}"
+          }
+
+          run_deploy "${{ steps.previous-traffic.outputs.service_exists }}"
+
+      - name: Get candidate revision and URLs
+        id: candidate
+        run: |
+          SERVICE_URL="$(gcloud run services describe "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --format='value(status.url)')"
+
+          CANDIDATE_REVISION="$(gcloud run services describe "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --format='value(status.latestReadyRevisionName)')"
+
+          CANDIDATE_URL="$(echo "${SERVICE_URL}" | sed 's#https://#https://candidate---#')"
+
+          if [ -z "${SERVICE_URL}" ] || [ -z "${CANDIDATE_REVISION}" ]; then
+            echo "::error::Cloud Run did not return the candidate revision details."
+            exit 1
+          fi
+
+          echo "service_url=${SERVICE_URL}" >> "$GITHUB_OUTPUT"
+          echo "candidate_url=${CANDIDATE_URL}" >> "$GITHUB_OUTPUT"
+          echo "revision=${CANDIDATE_REVISION}" >> "$GITHUB_OUTPUT"
+          echo "Production service URL: ${SERVICE_URL}"
+          echo "Candidate revision: ${CANDIDATE_REVISION}"
+
+      - name: Health check candidate before production traffic
+        id: candidate-health
+        continue-on-error: true
+        env:
+          CANDIDATE_URL: ${{ steps.candidate.outputs.candidate_url }}
+        run: |
+          HEALTH_URL="${CANDIDATE_URL%/}${HEALTH_PATH}"
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            STATUS_CODE="$(curl --silent --show-error --output /tmp/prod-candidate-health.txt --write-out '%{http_code}' "${HEALTH_URL}" || true)"
+
+            if [ "${STATUS_CODE}" = "200" ]; then
+              echo "Candidate health check passed: ${HEALTH_URL}"
+              exit 0
+            fi
+
+            echo "Candidate health attempt ${attempt}/12 returned HTTP ${STATUS_CODE}."
+            sleep 10
+          done
+
+          echo "::error::Production candidate health check failed: ${HEALTH_URL}"
+          cat /tmp/prod-candidate-health.txt || true
+          exit 1
+
+      - name: Remove unhealthy candidate tag
+        id: candidate-cleanup
+        if: always() && steps.candidate-health.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --remove-tags "candidate" \
+            --quiet
+
+      - name: Fail deployment after unhealthy candidate
+        if: always() && steps.candidate-health.outcome == 'failure'
+        run: |
+          echo "::error::Production candidate failed readiness before promotion. Candidate tag cleanup outcome: ${{ steps.candidate-cleanup.outcome }}."
+          exit 1
+
+      - name: Promote candidate to 100 percent traffic
+        if: steps.previous-traffic.outputs.service_exists == 'true'
+        id: promote
+        run: |
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --to-revisions "${{ steps.candidate.outputs.revision }}=100" \
+            --quiet
+
+          echo "promoted=true" >> "$GITHUB_OUTPUT"
+
+      - name: Health check production service
+        id: promoted-health
+        continue-on-error: true
+        env:
+          SERVICE_URL: ${{ steps.candidate.outputs.service_url }}
+        run: |
+          HEALTH_URL="${SERVICE_URL%/}${HEALTH_PATH}"
+
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            STATUS_CODE="$(curl --silent --show-error --output /tmp/prod-live-health.txt --write-out '%{http_code}' "${HEALTH_URL}" || true)"
+
+            if [ "${STATUS_CODE}" = "200" ]; then
+              echo "Production health check passed: ${HEALTH_URL}"
+              exit 0
+            fi
+
+            echo "Production health attempt ${attempt}/12 returned HTTP ${STATUS_CODE}."
+            sleep 10
+          done
+
+          echo "::error::Production health check failed: ${HEALTH_URL}"
+          cat /tmp/prod-live-health.txt || true
+          exit 1
+
+      - name: Roll back production traffic
+        id: rollback
+        if: always() && steps.promoted-health.outcome == 'failure' && steps.previous-traffic.outputs.traffic != ''
+        continue-on-error: true
+        run: |
+          echo "::warning::Production health failed. Restoring the previous traffic split."
+
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --to-revisions "${{ steps.previous-traffic.outputs.traffic }}" \
+            --quiet
+
+      - name: Verify production after rollback
+        id: rollback-health
+        if: always() && steps.promoted-health.outcome == 'failure' && steps.rollback.outcome == 'success'
+        continue-on-error: true
+        env:
+          SERVICE_URL: ${{ steps.candidate.outputs.service_url }}
+        run: |
+          HEALTH_URL="${SERVICE_URL%/}${HEALTH_PATH}"
+
+          for attempt in 1 2 3 4 5 6; do
+            STATUS_CODE="$(curl --silent --show-error --output /tmp/prod-rollback-health.txt --write-out '%{http_code}' "${HEALTH_URL}" || true)"
+
+            if [ "${STATUS_CODE}" = "200" ]; then
+              echo "Rollback health check passed: ${HEALTH_URL}"
+              exit 0
+            fi
+
+            echo "Rollback health attempt ${attempt}/6 returned HTTP ${STATUS_CODE}."
+            sleep 10
+          done
+
+          echo "::error::Production remained unhealthy after restoring the previous traffic split: ${HEALTH_URL}"
+          cat /tmp/prod-rollback-health.txt || true
+          exit 1
+
+      - name: Remove failed promoted candidate tag
+        id: promoted-cleanup
+        if: always() && steps.promoted-health.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --remove-tags "candidate" \
+            --quiet
+
+      - name: Fail deployment after unhealthy promotion
+        if: always() && steps.promoted-health.outcome == 'failure'
+        run: |
+          echo "::error::Production deployment failed its live health check. Rollback outcome: ${{ steps.rollback.outcome }}. Rollback health outcome: ${{ steps.rollback-health.outcome }}. Candidate cleanup outcome: ${{ steps.promoted-cleanup.outcome }}."
+          exit 1
+
+      - name: Mark healthy revision and image as stable
+        id: stable
+        if: steps.promoted-health.outcome == 'success'
+        run: |
+          gcloud run services update-traffic "${CLOUD_RUN_SERVICE_PROD}" \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --platform managed \
+            --update-tags "stable=${{ steps.candidate.outputs.revision }}" \
+            --remove-tags "candidate" \
+            --quiet
+
+          gcloud artifacts docker tags add \
+            "${{ steps.image.outputs.sha }}" \
+            "${{ steps.image.outputs.latest }}" \
+            --quiet
+
+          echo "Stable revision: ${{ steps.candidate.outputs.revision }}"
+
+      - name: Write deployment summary
+        if: always()
+        run: |
+          {
+            echo "## Production deployment"
+            echo ""
+            echo "- Service: ${CLOUD_RUN_SERVICE_PROD}"
+            echo "- Revision: ${{ steps.candidate.outputs.revision || 'not-created' }}"
+            echo "- Image: ${{ steps.image.outputs.sha || 'not-built' }}"
+            echo "- URL: ${{ steps.candidate.outputs.service_url || 'unavailable' }}"
+            echo "- Candidate health: ${{ steps.candidate-health.outcome }}"
+            echo "- Promotion: ${{ steps.promote.outcome }}"
+            echo "- Live health: ${{ steps.promoted-health.outcome }}"
+            echo "- Rollback: ${{ steps.rollback.outcome }}"
+            echo "- Rollback health: ${{ steps.rollback-health.outcome }}"
+            echo "- Pre-traffic cleanup: ${{ steps.candidate-cleanup.outcome }}"
+            echo "- Post-promotion cleanup: ${{ steps.promoted-cleanup.outcome }}"
+            echo "- Stable tagging: ${{ steps.stable.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary runtime environment file
+        if: always()
+        run: |
+          if [ -n "${CLOUD_RUN_ENV_FILE:-}" ]; then
+            rm -f "${CLOUD_RUN_ENV_FILE}"
+          fi
