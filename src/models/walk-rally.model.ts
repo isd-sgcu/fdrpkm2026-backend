@@ -34,6 +34,11 @@ const myRegistration = t.Object({
   })
 });
 
+const checkAttendance = t.Object({
+  scannedAt: t.Date({ title: "Scanned At" }),
+  scannedBy: t.String({ format: "uuid", title: "Scanned By (Staff ID)" })
+});
+
 export const WalkRallyModel = new Elysia().model({
   activity,
   registration,
@@ -68,5 +73,20 @@ export const WalkRallyModel = new Elysia().model({
   }),
   changeRoundBody: t.Object({
     round: t.Integer({ minimum: 1, maximum: 6, title: "Round" })
+  }),
+  checkAttendance,
+  checkAttendanceBody: t.Object({
+    studentId: t.String({
+      minLength: 1,
+      title: "Student ID",
+      description: "CUNET id, from QR scan"
+    }),
+    code: t.String({ minLength: 1, title: "Activity Code" })
+  }),
+  checkAttendanceResponse: t.Object({
+    studentId: t.String({ format: "uuid", title: "Student ID" }),
+    activityId: t.String({ format: "uuid", title: "Activity ID" }),
+    scannedAt: t.Date({ title: "Scanned At" }),
+    scannedBy: t.String({ format: "uuid", title: "Scanned By (Staff ID)" })
   })
 });

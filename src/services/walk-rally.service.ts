@@ -10,13 +10,17 @@ import {
 import type { AppErrorCode } from "@src/utils";
 import { isEventActive, isEventPassed } from "@src/utils/flags";
 import { WALK_RALLY } from "@src/constants";
+import { CheckinError, assertStaffForProject } from "@src/services/checkin.helper";
 
 // Constant
 export type WalkRallyDeps = { db?: Database };
 
 /** Thrown on expected business failures; controller maps `code` to an HTTP status. */
 class WalkRallyServiceError extends Error {
-  constructor(public code: AppErrorCode) {
+  constructor(
+    public code: AppErrorCode,
+    public context?: Record<string, unknown>
+  ) {
     super(code);
   }
 }
@@ -420,6 +424,123 @@ const changeRound = async (
   });
 };
 
+/**
+ * @name checkAttendance
+ * @api {POST} /walkrally/attendances
+ * @desc Staff scan student who attend in activity (both registration and walk-in).
+ * ---
+ * @param staffCunetId CUNET id of the scanning staff member, from the session
+ * @param input target student's CUNET id and the activity's code
+ * @throws {WalkRallyServiceError} FORBIDDEN_NOT_STAFF (role != "staff", or
+ *   their rpkm registration's staffRole != "walkrally"), STUDENT_NOT_FOUND,
+ *   INVALID_ACTIVITY, ALREADY_CHECKED_IN (context: original scannedAt/scannedBy),
+ *   POINTS_CAP_REACHED (>= 6 existing attendance rows)
+ */
+type checkAttendanceInput = {
+  studentId: string;
+  code: string;
+};
+
+const checkAttendance = async (
+  staffCunetId: string,
+  input: checkAttendanceInput,
+  deps: WalkRallyDeps = {}
+): Promise<{ studentId: string; activityId: string; scannedAt: Date; scannedBy: string }> => {
+  const database = deps.db ?? defaultDb;
+
+  let staff;
+  try {
+    staff = await assertStaffForProject({ staffCunetId, project: "walkrally" }, { db: database });
+  } catch (err) {
+    if (err instanceof CheckinError) throw new WalkRallyServiceError(err.code, err.context);
+    throw err;
+  }
+
+  const [student] = await database
+    .select()
+    .from(students)
+    .where(eq(students.studentId, input.studentId));
+  if (!student) throw new WalkRallyServiceError("STUDENT_NOT_FOUND");
+
+  const [activity] = await database
+    .select()
+    .from(walkRallyActivities)
+    .where(eq(walkRallyActivities.code, input.code));
+  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+
+  return database.transaction(async (tx) => {
+    await tx.select().from(students).where(eq(students.id, student.id)).for("update");
+
+    // Dedup before the cap, so a repeat scan at 6 points reports the real
+    // attendance instead of POINTS_CAP_REACHED.
+    const [existing] = await tx
+      .select()
+      .from(walkRallyAttendances)
+      .where(
+        and(
+          eq(walkRallyAttendances.studentId, student.id),
+          eq(walkRallyAttendances.activityId, activity.id)
+        )
+      );
+    if (existing) {
+      throw new WalkRallyServiceError("ALREADY_CHECKED_IN", {
+        scannedAt: existing.scannedAt,
+        scannedBy: existing.scannedBy
+      });
+    }
+
+    const [{ count }] = await tx
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(walkRallyAttendances)
+      .where(eq(walkRallyAttendances.studentId, student.id));
+    if (count >= 6) throw new WalkRallyServiceError("POINTS_CAP_REACHED");
+
+    // Determine whether the student was preregistered for this activity or walk-in (onsite).
+    const [registered] = await tx
+      .select()
+      .from(walkRallyRegistrations)
+      .where(
+        and(
+          eq(walkRallyRegistrations.studentId, student.id),
+          eq(walkRallyRegistrations.activityId, activity.id)
+        )
+      );
+    const source = registered ? "preregis" : "onsite";
+
+    const [inserted] = await tx
+      .insert(walkRallyAttendances)
+      .values({ studentId: student.id, activityId: activity.id, scannedBy: staff.id, source })
+      .onConflictDoNothing({
+        target: [walkRallyAttendances.studentId, walkRallyAttendances.activityId]
+      })
+      .returning();
+
+    if (!inserted) {
+      // Backstop only — the row lock above should make this unreachable.
+      const [raced] = await tx
+        .select()
+        .from(walkRallyAttendances)
+        .where(
+          and(
+            eq(walkRallyAttendances.studentId, student.id),
+            eq(walkRallyAttendances.activityId, activity.id)
+          )
+        );
+      throw new WalkRallyServiceError("ALREADY_CHECKED_IN", {
+        scannedAt: raced.scannedAt,
+        scannedBy: raced.scannedBy
+      });
+    }
+
+    return {
+      studentId: inserted.studentId,
+      activityId: inserted.activityId,
+      scannedAt: inserted.scannedAt,
+      scannedBy: inserted.scannedBy
+    };
+  });
+};
+
 // Namespace object — routes call `WalkRallyService.<fn>(...)` instead of
 export const WalkRallyService = {
   WalkRallyServiceError,
@@ -427,5 +548,6 @@ export const WalkRallyService = {
   getMe,
   registerForActivity,
   unregisterFromActivity,
-  changeRound
+  changeRound,
+  checkAttendance
 };

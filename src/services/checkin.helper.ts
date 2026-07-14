@@ -17,30 +17,31 @@ export class CheckinError extends Error {
   }
 }
 
-type CheckinProject = "rpkm" | "freshmennight" | "firstdate";
+type CheckinProject = "rpkm" | "freshmennight" | "firstdate" | "walkrally";
 
 const STAFF_GATE: Record<
   CheckinProject,
-  { registrationsProject: "firstdate" | "rpkm"; staffRole: "firstdate" | "rpkm" | "freshmennight" }
+  {
+    registrationsProject: "firstdate" | "rpkm";
+    staffRole: "firstdate" | "rpkm" | "freshmennight" | "walkrally";
+  }
 > = {
   firstdate: { registrationsProject: "firstdate", staffRole: "firstdate" },
   rpkm: { registrationsProject: "rpkm", staffRole: "rpkm" },
-  freshmennight: { registrationsProject: "rpkm", staffRole: "freshmennight" }
+  freshmennight: { registrationsProject: "rpkm", staffRole: "freshmennight" },
+  walkrally: { registrationsProject: "rpkm", staffRole: "walkrally" }
 };
 
-export async function checkinStudent(
-  params: {
-    studentCunetId: string;
-    staffCunetId: string;
-    project: CheckinProject;
-  },
+/**
+ * @desc Resolves the `students` row for a CUNET id, and asserts that the student is staff
+ * @throws {CheckinError} FORBIDDEN_NOT_STAFF
+ */
+export async function assertStaffForProject(
+  params: { staffCunetId: string; project: CheckinProject },
   deps: { db: Database }
 ) {
-  const { studentCunetId, staffCunetId, project } = params;
+  const { staffCunetId, project } = params;
   const { db } = deps;
-
-  const [student] = await db.select().from(students).where(eq(students.studentId, studentCunetId));
-  if (!student) throw new CheckinError("STUDENT_NOT_FOUND");
 
   const [staff] = await db.select().from(students).where(eq(students.studentId, staffCunetId));
   if (!staff || staff.role !== "staff") throw new CheckinError("FORBIDDEN_NOT_STAFF");
@@ -57,6 +58,25 @@ export async function checkinStudent(
     );
   if (!staffReg || staffReg.staffRole !== gate.staffRole)
     throw new CheckinError("FORBIDDEN_NOT_STAFF");
+
+  return staff;
+}
+
+export async function checkinStudent(
+  params: {
+    studentCunetId: string;
+    staffCunetId: string;
+    project: Exclude<CheckinProject, "walkrally">;
+  },
+  deps: { db: Database }
+) {
+  const { studentCunetId, staffCunetId, project } = params;
+  const { db } = deps;
+
+  const [student] = await db.select().from(students).where(eq(students.studentId, studentCunetId));
+  if (!student) throw new CheckinError("STUDENT_NOT_FOUND");
+
+  const staff = await assertStaffForProject({ staffCunetId, project }, deps);
 
   const newEntry: NewEntry = { project, studentId: student.id, scannedBy: staff.id };
 

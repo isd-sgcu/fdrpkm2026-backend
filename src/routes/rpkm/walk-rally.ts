@@ -185,4 +185,49 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
         409: tErrorResponse("ROUND_CONFLICT")
       }
     }
+  )
+  .post(
+    "/attendances",
+    async ({ user, status, body }) => {
+      const staffCunetId = user.email?.split("@")[0] ?? "";
+
+      try {
+        return successResponse(await WalkRallyService.checkAttendance(staffCunetId, body));
+      } catch (err) {
+        if (err instanceof WalkRallyService.WalkRallyServiceError) {
+          switch (err.code) {
+            case "FORBIDDEN_NOT_STAFF":
+              return status(403, errorResponse("FORBIDDEN_NOT_STAFF"));
+            case "STUDENT_NOT_FOUND":
+              return status(404, errorResponse("STUDENT_NOT_FOUND"));
+            case "INVALID_ACTIVITY":
+              return status(404, errorResponse("INVALID_ACTIVITY"));
+            case "ALREADY_CHECKED_IN":
+              return status(409, errorResponse("ALREADY_CHECKED_IN", err.context));
+            case "POINTS_CAP_REACHED":
+              return status(409, errorResponse("POINTS_CAP_REACHED"));
+            default:
+              throw err;
+          }
+        }
+        throw err;
+      }
+    },
+    {
+      auth: true,
+      body: "WalkRally.CheckAttendanceBody",
+      response: {
+        200: tSuccessResponse(WalkRallyModel.models.checkAttendanceResponse.Schema()),
+        401: tErrorResponse("UNAUTHORIZED"),
+        403: tErrorResponse("FORBIDDEN_NOT_STAFF"),
+        404: t.Union([tErrorResponse("STUDENT_NOT_FOUND"), tErrorResponse("INVALID_ACTIVITY")]),
+        409: t.Union([
+          tErrorResponse(
+            "ALREADY_CHECKED_IN",
+            WalkRallyModel.models.checkAttendanceResponse.Schema()
+          ),
+          tErrorResponse("POINTS_CAP_REACHED")
+        ])
+      }
+    }
   );
