@@ -2,9 +2,15 @@
 // Which is for feature flag.
 
 export const EventTime = {
+  /** FirstDate registration: 17 Jul 19:00 – 18 Jul 18:00. */
   cu_firstdate_registration: {
     start: new Date("2026-07-17T19:00:00+07:00"),
-    end: new Date("2026-07-17T16:59:59+07:00")
+    end: new Date("2026-07-18T18:00:00+07:00")
+  },
+  /** RPKM registration: opens 18 Jul 19:00; no announced close (far-future sentinel). */
+  rpkm_registration: {
+    start: new Date("2026-07-18T19:00:00+07:00"),
+    end: new Date("2099-12-31T23:59:59+07:00")
   },
   /** House choosing (group house preferences): 18–21 Jul. */
   rpkm_house_pick: {
