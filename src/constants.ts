@@ -2,31 +2,60 @@
 // Which is for feature flag.
 
 export const EventTime = {
-  // Example: "new-feature": true,
-  // Add your feature flags here
   cu_firstdate_registration: {
     start: new Date("2026-07-17T19:00:00+07:00"),
     end: new Date("2026-07-17T16:59:59+07:00")
   },
+  /** House choosing (group house preferences): 18–21 Jul. */
   rpkm_house_pick: {
     start: new Date("2026-07-18T00:00:00+07:00"),
     end: new Date("2026-07-21T23:59:00+07:00")
   },
+  /** House result announcement: 23 Jul onward. */
   rpkm_house_result: {
     start: new Date("2026-07-23T19:00:00+07:00"),
     end: new Date("2099-12-31T23:59:59+07:00")
   },
+  /** House activities (บ้านรับเพื่อน): 1–2 Aug. */
+  rpkm_house_activity: {
+    start: new Date("2026-08-01T00:00:00+07:00"),
+    end: new Date("2026-08-02T23:59:59+07:00")
+  },
+  /** Chula Jigsaw: 20 Jul – 3 Aug. */
   rpkm_jigsaw: {
     start: new Date("2026-07-20T00:00:00+07:00"),
     end: new Date("2026-08-03T23:59:59+07:00")
   },
+  /** Chula QR Quest (game key `csr`): 20 Jul – 7 Aug. */
   rpkm_csr: {
     start: new Date("2026-07-20T00:00:00+07:00"),
     end: new Date("2026-08-07T23:59:59+07:00")
   },
+  /** My Freshy Story: 22 Jul – 3 Aug. */
+  rpkm_my_freshy_story: {
+    start: new Date("2026-07-22T00:00:00+07:00"),
+    end: new Date("2026-08-03T23:59:59+07:00")
+  },
+  /**
+   * Field trip registration: 18–20 Jul for every route, or until a trip is
+   * full (capacity is enforced on the Google-form side, not here). The trips
+   * themselves run on different days per route (see docs/db/schema-spec.md):
+   * สามย่าน 22–25 Jul; รักโลก plant walk 22 & 23 Jul, trashvenger 24 & 27 Jul;
+   * จุฬาฯ 25–26 & 28–29 Jul.
+   */
+  rpkm_fieldtrip_registration: {
+    start: new Date("2026-07-18T00:00:00+07:00"),
+    end: new Date("2026-07-20T23:59:59+07:00")
+  },
+  /** Walk rally slot registration: 22–29 Jul (editable until close). */
   rpkm_walkrally_registration: {
     start: new Date("2026-07-22T00:00:00+07:00"),
     end: new Date("2026-07-29T23:59:59+07:00")
+  },
+  /** Walk rally event day (d-day): 31 Jul, rounds 12:00–16:00. */
+  rpkm_walkrally_event: {
+    start: new Date("2026-07-31T12:00:00+07:00"),
+    end: new Date("2026-07-31T16:00:00+07:00")
   }
   // Other events can be added here as needed
 };
