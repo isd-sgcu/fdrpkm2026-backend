@@ -144,24 +144,24 @@ describe("WalkRallyService.getActivityRounds", () => {
     const result = await WalkRallyService.getActivityRounds("6900000001", "MUS-01", injected());
     expect(result.rounds).toHaveLength(6);
     expect(result.rounds.map((r) => r.round)).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(result.registeredRound).toBe(false);
+    expect(result.registeredRound).toBeNull();
     for (const r of result.rounds) {
       expect(r.count).toBe(0);
       expect(r.conflict).toBeUndefined();
     }
   });
 
-  it("marks registeredRound when the student has any registration for this activity", async () => {
+  it("returns the student's own round number when registered for this activity", async () => {
     const student = await createStudent("6900000001");
     const activity = await createActivity("MUS-01");
     await db.insert(schema.walkRallyRegistrations).values({
       studentId: student.id,
       activityId: activity.id,
-      round: 1
+      round: 3
     });
 
     const result = await WalkRallyService.getActivityRounds("6900000001", "MUS-01", injected());
-    expect(result.registeredRound).toBe(true);
+    expect(result.registeredRound).toBe(3);
   });
 
   it("reports count without disabling the round (no capacity check here)", async () => {
@@ -387,8 +387,9 @@ describe("WalkRallyService.registerForActivity", () => {
     ).rejects.toMatchObject({ code: "ACTIVITY_ALREADY_REGISTERED" });
   });
 
-  it("rejects the same round number on a different activity", async () => {
+  it("rejects the same round number on a different activity when the time slot is identical", async () => {
     const student = await createStudent("6900000001");
+    // both default schedule -> round 3 is the same 11:00-11:30 slot for both
     const otherActivity = await createActivity("MUS-01");
     await createActivity("MUS-02");
     await createRegistration(student.id, otherActivity.id, 3, new Date());
@@ -396,6 +397,21 @@ describe("WalkRallyService.registerForActivity", () => {
     await expect(
       WalkRallyService.registerForActivity("6900000001", { code: "MUS-02", round: 3 }, injected())
     ).rejects.toMatchObject({ code: "ROUND_CONFLICT" });
+  });
+
+  it("allows the same round number on a different activity when the time slots don't overlap", async () => {
+    const student = await createStudent("6900000001");
+    // default round 1: 09:00-09:30; cu_museum round 1: 12:00-12:30 -- no overlap
+    const defaultActivity = await createActivity("MUS-01");
+    await createActivity("cu_museum");
+    await createRegistration(student.id, defaultActivity.id, 1, new Date());
+
+    const result = await WalkRallyService.registerForActivity(
+      "6900000001",
+      { code: "cu_museum", round: 1 },
+      injected()
+    );
+    expect(result).toEqual({ code: "cu_museum", round: 1 });
   });
 
   it("rejects a different round number whose time overlaps across schedules", async () => {

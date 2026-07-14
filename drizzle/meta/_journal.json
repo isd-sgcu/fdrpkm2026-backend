@@ -64,6 +64,13 @@
       "when": 1783958742460,
       "tag": "0008_slim_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784060312017,
+      "tag": "0009_hot_firelord",
+      "breakpoints": true
     }
   ]
 }

@@ -34,8 +34,9 @@ Think of each table as a spreadsheet/list. Here are all 12:
 - **entries** — when a staff scans a น้อง's QR at an event entrance, we record it here. Each event is scanned separately (`event` = `firstdate` | `freshmennight` | `rpkm`), so up to three rows per น้อง — one per event. If scanning fails, staff can type the student ID instead — same result.
 
 ### Walk rally (31 July, 12:00–16:00)
+
 - **walk_rally_activities** — the 8 activities: 3 workshops (ลูกชุบ, พิมเสนน้ำ, เพ้นท์ถุงผ้า), 4 museums, 1 board-game minigame. Names/descriptions live in the i18n files, keyed by code.
-- **walk_rally_registrations** — a น้อง's pre-booked slots (activity + round 1–6). Rules baked in: can't book the same activity twice, can't book two things in the same round, each slot caps at 30 (first come, first serve). Can change/cancel until reg closes 29 July 23:59.
+- **walk_rally_registrations** — a น้อง's pre-booked slots (activity + round 1–6, each activity has its own round schedule). Rules baked in: can't book the same activity twice, can't book two slots whose actual times overlap, each slot caps at 30 (first come, first serve). Can change/cancel until reg closes 29 July 23:59.
 - **walk_rally_attendances** — after each slot, staff scan the น้อง's QR to record they actually attended → 1 point per activity. Walk-ins (no pre-booking) get scanned and counted the same way. Scanning the same activity twice does nothing (no error). Collect 4+ points → reward.
 
 ### RPKM stamp games (Jigsaw + CSR)

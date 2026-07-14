@@ -35,7 +35,7 @@ export const AppErrorCode = {
   POINTS_CAP_REACHED: "POINTS_CAP_REACHED",
   /** 403: outside the walk rally registration window (open/close). */
   REGISTRATION_CLOSED: "REGISTRATION_CLOSED",
-  /** 409: student already has a registration with this round number or an overlapping time slot. */
+  /** 409: student already has a registration with an overlapping time slot. */
   ROUND_CONFLICT: "ROUND_CONFLICT",
   /** 404: checkpoint code does not exist for the given rpkm game. */
   INVALID_CHECKPOINT: "INVALID_CHECKPOINT",

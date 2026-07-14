@@ -48,9 +48,9 @@ export const WalkRallyModel = new Elysia().model({
   }),
   getActivityRoundsResponse: t.Object({
     rounds: t.Array(round),
-    registeredRound: t.Boolean({
+    registeredRound: t.Union([t.Integer(), t.Null()], {
       title: "Registered Round",
-      description: "True if the student already holds a registration for this activity, any round."
+      description: "The student's round for this activity, or null if not registered."
     })
   }),
   getMeResponse: t.Object({

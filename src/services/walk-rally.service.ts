@@ -77,7 +77,6 @@ const assertNoRoundConflict = async (
     .where(eq(walkRallyRegistrations.studentId, studentId));
 
   const conflict = myRegistrations.some((r) => {
-    if (r.round === targetRound) return true;
     const slot = WALK_RALLY.rounds[scheduleFor(r.activityCode)].find((s) => s.round === r.round)!;
     return overlaps(targetStart, targetEnd, toMinutes(slot.start), toMinutes(slot.end));
   });
@@ -146,7 +145,7 @@ const getActivityRounds = async (
   studentId: string,
   activityCode: string,
   deps: WalkRallyDeps = {}
-): Promise<{ rounds: RoundInfo[]; registeredRound: boolean }> => {
+): Promise<{ rounds: RoundInfo[]; registeredRound: number | null }> => {
   const database = deps.db ?? defaultDb;
   const student = await resolveCurrentStudent(studentId, deps);
 
@@ -167,7 +166,7 @@ const getActivityRounds = async (
     .innerJoin(walkRallyActivities, eq(walkRallyRegistrations.activityId, walkRallyActivities.id))
     .where(eq(walkRallyRegistrations.studentId, student.id));
 
-  const activityAlreadyRegistered = myRegistrations.some((r) => r.activityId === activity.id);
+  const ownRegistration = myRegistrations.find((r) => r.activityId === activity.id);
 
   // Registered count per round, for this activity only
   const countRows = await database
@@ -210,7 +209,7 @@ const getActivityRounds = async (
 
   return {
     rounds,
-    registeredRound: activityAlreadyRegistered
+    registeredRound: ownRegistration?.round ?? null
   };
 };
 

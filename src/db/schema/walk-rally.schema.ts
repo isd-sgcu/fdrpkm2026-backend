@@ -35,8 +35,8 @@ export const walkRallyRegistrations = t.pgTable(
     t
       .unique("walk_rally_registrations_student_activity_unique")
       .on(table.studentId, table.activityId),
-    // all activities share the 6 round times -> same round twice = overlap
-    t.unique("walk_rally_registrations_student_round_unique").on(table.studentId, table.round),
+    // round number alone isn't a conflict anymore -- schedules diverge per activity
+    // (cu_museum vs default), so only actual time overlap (checked in the service) blocks a booking
     t.index("walk_rally_registrations_activity_round_idx").on(table.activityId, table.round),
     t.check("walk_rally_registrations_round_check", sql`${table.round} between 1 and 6`)
   ]

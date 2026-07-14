@@ -1,0 +1,1 @@
+ALTER TABLE "walk_rally_registrations" DROP CONSTRAINT "walk_rally_registrations_student_round_unique";
