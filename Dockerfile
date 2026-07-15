@@ -1,3 +1,5 @@
+ARG NODE_ENV=production
+
 FROM oven/bun:1.3.14 AS deps
 WORKDIR /app
 
@@ -5,6 +7,9 @@ COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 FROM deps AS build
+ARG NODE_ENV
+ENV NODE_ENV=${NODE_ENV}
+
 COPY tsconfig.json ./
 COPY src ./src
 RUN bun run build
@@ -12,7 +17,8 @@ RUN bun run build
 FROM oven/bun:1.3.14 AS runtime
 WORKDIR /app
 
-ENV NODE_ENV=production \
+ARG NODE_ENV
+ENV NODE_ENV=${NODE_ENV} \
     HOST=0.0.0.0 \
     PORT=8080
 

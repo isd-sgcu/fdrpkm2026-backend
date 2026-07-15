@@ -262,6 +262,8 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ steps.image.outputs.sha }}
+          build-args: |
+            NODE_ENV=production
           cache-from: type=gha,scope=prod
           cache-to: type=gha,mode=max,scope=prod
           provenance: mode=max
