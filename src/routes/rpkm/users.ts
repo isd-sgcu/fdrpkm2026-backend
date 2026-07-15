@@ -1,6 +1,6 @@
 import { Elysia } from "elysia";
 
-import { successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
+import { authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
 import { authMiddleware } from "@src/routes/auth";
 import { RpkmRegistrationModel } from "@src/models/rpkm-registration.model";
 import { RpkmService } from "@src/services/rpkm.service";
@@ -25,6 +25,14 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
     async ({ user, body }) => successResponse(RpkmService.registerRpkm(user, body)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Users"],
+        summary: "Register for RPKM",
+        description:
+          "Creates the RPKM registration for the authenticated freshman (PDPA consent " +
+          "recorded) and a solo group. Fails with ALREADY_REGISTERED on a second attempt."
+      },
       body: "RpkmUser.RegistrationBody",
       response: {
         200: tSuccessResponse(RpkmRegistrationModel.models.registrationResult.Schema()),
@@ -41,6 +49,14 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
   // Any authenticated user may read their own debloated info (no freshman/staff gate).
   .get("/me", async ({ user }) => successResponse(RpkmService.getMe(user)), {
     auth: true,
+    detail: {
+      security: authSecurity,
+      tags: ["RPKM - Users"],
+      summary: "Get my RPKM summary",
+      description:
+        "Lightweight info about the authenticated user for the RPKM context " +
+        "(any authenticated user — no freshman/staff gate)."
+    },
     response: {
       200: tSuccessResponse(RpkmRegistrationModel.models.meResult.Schema()),
       ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN")
@@ -49,6 +65,12 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
   // Detailed registration profile prefill
   .get("/profile", async ({ user }) => successResponse(RpkmService.getProfile(user)), {
     auth: true,
+    detail: {
+      security: authSecurity,
+      tags: ["RPKM - Users"],
+      summary: "Get my RPKM profile",
+      description: "Detailed registration profile, used to prefill the registration form."
+    },
     response: {
       200: tSuccessResponse(RpkmRegistrationModel.models.profileResult.Schema()),
       ...tAppErrors("UNAUTHORIZED")
@@ -59,6 +81,12 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
     async ({ user, body }) => successResponse(RpkmService.updateProfile(user, body)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Users"],
+        summary: "Update my RPKM profile",
+        description: "Partial update of the registration profile fields."
+      },
       body: "RpkmUser.UpdateProfileBody",
       response: {
         200: tSuccessResponse(RpkmRegistrationModel.models.profileResult.Schema()),

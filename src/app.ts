@@ -68,14 +68,79 @@ export const createApp = () =>
                 title: "fdrpkm2026-backend",
                 version: "0.1.0"
               },
+              // Sidebar grouping + descriptions for the Scalar UI. Routes pick a
+              // tag via `detail.tags`; untagged better-auth paths are tagged
+              // "Better Auth" in OpenAPI.getPaths (src/utils/auth.ts).
+              tags: [
+                {
+                  name: "Health",
+                  description: "Liveness/readiness probes for Cloud Run and GCP uptime checks."
+                },
+                {
+                  name: "Better Auth",
+                  description: "Authentication (Google SSO via better-auth, mounted at /v1/auth)."
+                },
+                {
+                  name: "FirstDate - Users",
+                  description: "FirstDate registration flow: register, profile, my info."
+                },
+                {
+                  name: "FirstDate - Check-in",
+                  description: "Staff entry scans for the FirstDate event."
+                },
+                {
+                  name: "RPKM - Users",
+                  description: "RPKM registration flow: register, profile, my info."
+                },
+                {
+                  name: "RPKM - Check-in",
+                  description: "Staff entry scans for RPKM and Freshmen Night."
+                },
+                {
+                  name: "RPKM - Groups",
+                  description: "Group management: join codes, members, house preferences."
+                },
+                {
+                  name: "RPKM - Houses",
+                  description: "House catalog, demand stats, preference confirmation, results."
+                },
+                {
+                  name: "RPKM - Games",
+                  description: "Jigsaw and CSR checkpoint games: progress and geofenced collection."
+                },
+                {
+                  name: "RPKM - Walk Rally",
+                  description:
+                    "Workshops/museums/minigame: round pre-registration and staff attendance scans."
+                },
+                {
+                  name: "Dev",
+                  description:
+                    "Dev-only tooling (personas, impersonation, seeding). Requires x-dev-key; never mounted in production."
+                },
+                {
+                  name: "Example",
+                  description: "Reference routes showing the controller pattern. Dev-only."
+                }
+              ],
               components: authDocs?.components,
               paths: authDocs?.paths
             }
           })
     )
-    .get("/", () => ({
-      name: "fdrpkm2026-backend",
-      version: "0.1.0"
-    }))
+    .get(
+      "/",
+      () => ({
+        name: "fdrpkm2026-backend",
+        version: "0.1.0"
+      }),
+      {
+        detail: {
+          tags: ["Health"],
+          summary: "Service info",
+          description: "Service name and version — quick way to confirm the API is up."
+        }
+      }
+    )
     .use(authMiddleware)
     .use(apiRoutes);

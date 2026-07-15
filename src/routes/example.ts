@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 // Import should be prefixed with @src/ to avoid relative path hell
-import { AppError, tAppErrors } from "@src/utils";
+import { AppError, authSecurity, tAppErrors } from "@src/utils";
 import { ExampleModel } from "@src/models/example.model";
 import { ExampleService } from "@src/services/example.service";
 import { authMiddleware } from "@src/routes/auth";
@@ -33,7 +33,9 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
   .use(authMiddleware)
   .use(ExampleModel)
   .prefix("model", "Example.")
-  .get("/", () => ({ project: "example" }))
+  .get("/", () => ({ project: "example" }), {
+    detail: { tags: ["Example"], summary: "Example ping" }
+  })
   // Go to http://localhost:3000/openapi#GET/v1/example/user/{userId} for OpenAPI docs and try it out
   .get(
     "/user/:userId",
@@ -47,6 +49,11 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       return ExampleService.getExampleUser(params.userId);
     },
     {
+      detail: {
+        tags: ["Example"],
+        summary: "Get an example user",
+        description: "Reference route — copy this file's shape when adding a real feature."
+      },
       params: "Example.UserUpdateParams",
       response: {
         200: "Example.UserUpdateBody",
@@ -78,6 +85,11 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
     // Part below is for OpenAPI docs and type-safe validation.
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["Example"],
+        summary: "Upsert an example user"
+      },
       // Type-safe params and it will show in OpenAPI Docs
       params: "Example.UserUpdateParams",
       // Type-safe request body, auto api doc and also auto validation
@@ -102,6 +114,10 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       return status(204, undefined);
     },
     {
+      detail: {
+        tags: ["Example"],
+        summary: "Delete an example user"
+      },
       params: "Example.UserUpdateParams",
       response: {
         204: t.Void(),
@@ -118,6 +134,11 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       return { message: `Hello ${auth.user.userId}, you are authorized!` };
     },
     {
+      detail: {
+        tags: ["Example"],
+        summary: "Auth macro demo",
+        description: "Example protected route using the `auth` macro."
+      },
       // ADD THIS TO ACTIVATE AUTH MACRO IN HANDLER.
       response: {
         200: t.Object({ message: t.String() }),

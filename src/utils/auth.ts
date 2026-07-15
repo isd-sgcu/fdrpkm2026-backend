@@ -77,6 +77,11 @@ export const auth = betterAuth({
   }
 });
 
+// Security requirements referenced by route `detail.security`. The schemes
+// themselves are defined in OpenAPI.components below.
+export const authSecurity: Record<string, string[]>[] = [{ cookieAuth: [] }, { bearerAuth: [] }];
+export const devKeySecurity: Record<string, string[]>[] = [{ devKey: [] }];
+
 // Bridges the Better Auth openAPI() plugin schema into the Elysia Scalar docs:
 // spread `components` and `getPaths()` into the openapi() `documentation` option.
 let _schema: ReturnType<typeof auth.api.generateOpenAPISchema> | undefined;
@@ -101,5 +106,41 @@ export const OpenAPI = {
       // openapi-types, but the generated document is valid OpenAPI 3.x.
       return reference as never;
     }),
-  components: () => getSchema().then(({ components }) => components as never)
+  components: () =>
+    getSchema().then(
+      ({ components }) =>
+        ({
+          ...components,
+          securitySchemes: {
+            ...(components as { securitySchemes?: Record<string, unknown> }).securitySchemes,
+            // Session cookie set by Better Auth after Google SSO sign-in.
+            // Behind HTTPS the cookie is issued with the __Secure- prefix
+            // (__Secure-better-auth.session_token).
+            cookieAuth: {
+              type: "apiKey",
+              in: "cookie",
+              name: "better-auth.session_token",
+              description:
+                "Better Auth session cookie (Google SSO). Named " +
+                "`__Secure-better-auth.session_token` when served over HTTPS."
+            },
+            // Session token via the Better Auth bearer() plugin — the token
+            // returned in the `set-auth-token` response header at sign-in.
+            bearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              description:
+                "Better Auth session token (bearer() plugin), from the `set-auth-token` " +
+                "header returned at sign-in."
+            },
+            // Dev-only tooling key (see src/routes/dev.ts); never in production.
+            devKey: {
+              type: "apiKey",
+              in: "header",
+              name: "x-dev-key",
+              description: "DEV_API_KEY for dev-only endpoints. Never mounted in production."
+            }
+          }
+        }) as never
+    )
 } as const;

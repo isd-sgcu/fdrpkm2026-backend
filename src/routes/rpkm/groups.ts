@@ -1,7 +1,7 @@
 import { GroupsModel } from "@src/models/groups.model";
 import { authMiddleware } from "@src/routes/auth";
 import { GroupsService } from "@src/services/groups.service";
-import { successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
+import { authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
 import { Elysia } from "elysia";
 
 // Thin controllers: services throw AppError on business failures; the global
@@ -17,6 +17,15 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     async ({ studentId, body }) => successResponse(GroupsService.join(studentId, body.joinCode)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Groups"],
+        summary: "Join a group by join code",
+        description:
+          "Moves the authenticated freshman into the group behind the join code. Fails when " +
+          "the target group is full or confirmed, or when the caller leads a group that still " +
+          "has members."
+      },
       body: "Groups.JoinBody",
       response: {
         200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
@@ -35,6 +44,12 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
   )
   .get("me", async ({ studentId }) => successResponse(GroupsService.getMyGroup(studentId)), {
     auth: true,
+    detail: {
+      security: authSecurity,
+      tags: ["RPKM - Groups"],
+      summary: "Get my group",
+      description: "The authenticated freshman's group with its members and join code."
+    },
     response: {
       200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
       ...tAppErrors("UNAUTHORIZED", "NOT_FOUND")
@@ -46,6 +61,14 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       successResponse({ joinCode: await GroupsService.regenerateJoinCode(studentId) }),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Groups"],
+        summary: "Regenerate my group's join code",
+        description:
+          "Leader only. Invalidates the old join code and returns a fresh one. Rejected once " +
+          "the group is confirmed."
+      },
       response: {
         200: tSuccessResponse(GroupsModel.models.joinCodeResponse.Schema()),
         ...tAppErrors(
@@ -63,6 +86,12 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
     async ({ studentId }) => successResponse(GroupsService.getHousePreferences(studentId)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Groups"],
+        summary: "Get my group's house preferences",
+        description: "Ordered house preference list of the authenticated freshman's group."
+      },
       response: {
         200: tSuccessResponse(GroupsModel.models.housePreferencesResponse.Schema()),
         ...tAppErrors("UNAUTHORIZED", "NOT_FOUND")
@@ -75,6 +104,14 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       successResponse(GroupsService.setHousePreferences(studentId, body.houseIds)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Groups"],
+        summary: "Set my group's house preferences",
+        description:
+          "Leader only. Replaces the group's ordered house preference list. Rejected after " +
+          "the house-pick window closes."
+      },
       body: "Groups.HousePreferencesBody",
       response: {
         200: tSuccessResponse(GroupsModel.models.housePreferencesResponse.Schema()),
@@ -91,6 +128,14 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
   )
   .delete("me", async ({ studentId }) => successResponse(GroupsService.leave(studentId)), {
     auth: true,
+    detail: {
+      security: authSecurity,
+      tags: ["RPKM - Groups"],
+      summary: "Leave my group",
+      description:
+        "Leaves the current group and lands the freshman back in a fresh solo group. " +
+        "Rejected once the group is confirmed."
+    },
     response: {
       200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
       ...tAppErrors("UNAUTHORIZED", "NOT_FOUND", "ALREADY_CONFIRMED", "INTERNAL_SERVER_ERROR")
@@ -102,6 +147,14 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       successResponse(GroupsService.kickMember(studentId, params.userId)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Groups"],
+        summary: "Kick a member from my group",
+        description:
+          "Leader only. Removes the member, who lands in a fresh solo group. Rejected once " +
+          "the group is confirmed."
+      },
       params: "Groups.MemberParams",
       response: {
         200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),

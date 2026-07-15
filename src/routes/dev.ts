@@ -20,6 +20,7 @@ import {
 import {
   AppError,
   auth,
+  devKeySecurity,
   generateJoinCode,
   successResponse,
   tAppErrors,
@@ -157,6 +158,7 @@ export const createDevRoutes = (database: Database = db) =>
     .get("", () => successResponse({ devMode: true as const }), {
       detail: {
         tags: ["Dev"],
+        summary: "Dev-mode probe",
         description: "Dev-mode probe for the frontend dev banner. No x-dev-key needed."
       },
       response: { 200: tSuccessResponse(t.Object({ devMode: t.Literal(true) })) }
@@ -285,6 +287,8 @@ export const createDevRoutes = (database: Database = db) =>
       {
         detail: {
           tags: ["Dev"],
+          security: devKeySecurity,
+          summary: "Create a test persona",
           description:
             "Creates a test persona: better-auth user (Google SSO bypassed) + students row, " +
             "optionally registered for firstdate/rpkm (rpkm gets a solo group like the real flow). " +
@@ -386,6 +390,8 @@ export const createDevRoutes = (database: Database = db) =>
       {
         detail: {
           tags: ["Dev"],
+          security: devKeySecurity,
+          summary: "Impersonate a persona",
           description:
             "Mints a real better-auth session for the given studentId (auto-creates the persona " +
             "if missing). Sets the session cookie on the response AND returns the signed token " +
@@ -450,6 +456,8 @@ export const createDevRoutes = (database: Database = db) =>
       {
         detail: {
           tags: ["Dev"],
+          security: devKeySecurity,
+          summary: "List personas",
           description: "Lists every persona (students row) for the dev banner's user picker."
         },
         response: { 200: tSuccessResponse(t.Object({ users: t.Array(tDevUser) })) }
@@ -513,6 +521,8 @@ export const createDevRoutes = (database: Database = db) =>
       {
         detail: {
           tags: ["Dev"],
+          security: devKeySecurity,
+          summary: "Delete a persona",
           description:
             "Wipes a persona completely (auth user + sessions, students row, registrations, " +
             "groups they lead, scans/attendances) so it can be recreated clean."
@@ -561,6 +571,8 @@ export const createDevRoutes = (database: Database = db) =>
       {
         detail: {
           tags: ["Dev"],
+          security: devKeySecurity,
+          summary: "Seed baseline fixtures",
           description:
             "Seeds baseline fixtures on an empty database: 22 houses, the 8 walk-rally " +
             "activities, and game checkpoints. Idempotent (conflicts skipped). Default codes " +

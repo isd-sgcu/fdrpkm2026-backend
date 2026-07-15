@@ -1,6 +1,6 @@
 import { Elysia } from "elysia";
 
-import { successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
+import { authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
 import { authMiddleware } from "@src/routes/auth";
 import { FdRegistrationModel } from "@src/models/fd-registration.model";
 import { FirstDateService } from "@src/services/firstdate.service";
@@ -23,6 +23,14 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
     async ({ user, body }) => successResponse(FirstDateService.registerFd(user, body)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["FirstDate - Users"],
+        summary: "Register for FirstDate",
+        description:
+          "Creates the FirstDate registration for the authenticated freshman (PDPA consent " +
+          "recorded). Fails with ALREADY_REGISTERED on a second attempt."
+      },
       body: "FdUser.RegistrationBody",
       response: {
         200: tSuccessResponse(FdRegistrationModel.models.registrationResult.Schema()),
@@ -39,6 +47,14 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   // Any authenticated user may read their own debloated info (no freshman/staff gate).
   .get("/me", async ({ user }) => successResponse(FirstDateService.getMe(user)), {
     auth: true,
+    detail: {
+      security: authSecurity,
+      tags: ["FirstDate - Users"],
+      summary: "Get my FirstDate summary",
+      description:
+        "Lightweight info about the authenticated user for the FirstDate context " +
+        "(any authenticated user — no freshman/staff gate)."
+    },
     response: {
       200: tSuccessResponse(FdRegistrationModel.models.meResult.Schema()),
       ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN")
@@ -47,6 +63,12 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   // Detailed registration profile prefill
   .get("/profile", async ({ user }) => successResponse(FirstDateService.getProfile(user)), {
     auth: true,
+    detail: {
+      security: authSecurity,
+      tags: ["FirstDate - Users"],
+      summary: "Get my FirstDate profile",
+      description: "Detailed registration profile, used to prefill the registration form."
+    },
     response: {
       200: tSuccessResponse(FdRegistrationModel.models.profileResult.Schema()),
       ...tAppErrors("UNAUTHORIZED")
@@ -57,6 +79,12 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
     async ({ user, body }) => successResponse(FirstDateService.updateProfile(user, body)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["FirstDate - Users"],
+        summary: "Update my FirstDate profile",
+        description: "Partial update of the registration profile fields."
+      },
       body: "FdUser.UpdateProfileBody",
       response: {
         200: tSuccessResponse(FdRegistrationModel.models.profileResult.Schema()),

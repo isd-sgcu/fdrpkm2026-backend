@@ -3,7 +3,14 @@ import { authMiddleware } from "@src/routes/auth";
 import { HousesModel } from "@src/models/houses.model";
 import { GroupsService } from "@src/services/groups.service";
 import { HousesService } from "@src/services/houses.service";
-import { AppError, isFreshman, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
+import {
+  AppError,
+  authSecurity,
+  isFreshman,
+  successResponse,
+  tAppErrors,
+  tSuccessResponse
+} from "@src/utils";
 
 export const houseRoute = new Elysia({ prefix: "/houses" })
   .use(authMiddleware)
@@ -15,6 +22,12 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
   // validation, and OpenAPI, instead of a hand-duplicated t.Object.
   .get("/", () => HousesService.listHouses(), {
     auth: true,
+    detail: {
+      security: authSecurity,
+      tags: ["RPKM - Houses"],
+      summary: "List all houses",
+      description: "All 22 RPKM houses with their capacity metadata."
+    },
     response: { 200: t.Array(t.Ref("Houses.House")) }
   })
   .get(
@@ -25,6 +38,14 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     },
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Houses"],
+        summary: "Get house demand stats",
+        description:
+          "Per-house demand statistics (how contested each house is) for freshmen picking " +
+          "preferences."
+      },
       response: {
         200: t.Array(t.Ref("Houses.HouseStat")),
         ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN")
@@ -33,6 +54,11 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
   )
   .get("/:id", ({ params }) => HousesService.getHouse(params.id), {
     auth: true,
+    detail: {
+      security: authSecurity,
+      tags: ["RPKM - Houses"],
+      summary: "Get a house by id"
+    },
     params: "Houses.HouseId",
     response: {
       200: "Houses.House",
@@ -47,6 +73,14 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     }),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Houses"],
+        summary: "Get my house assignment result",
+        description:
+          "The house the authenticated freshman's group was assigned to. Returns " +
+          "RESULT_NOT_ANNOUNCED before the announcement window opens."
+      },
       response: {
         200: tSuccessResponse(HousesModel.models.houseResult.Schema()),
         ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN", "RESULT_NOT_ANNOUNCED", "NOT_FOUND")
@@ -58,6 +92,14 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
     async ({ studentId }) => successResponse(GroupsService.confirmGroup(studentId)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Houses"],
+        summary: "Confirm my group's house preferences",
+        description:
+          "Leader only. Locks the group (members and house preferences become immutable). " +
+          "Requires a complete, valid preference list."
+      },
       response: {
         200: tSuccessResponse(HousesModel.models.confirmResponse.Schema()),
         ...tAppErrors(

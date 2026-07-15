@@ -3,7 +3,14 @@ import { Elysia } from "elysia";
 import { authMiddleware } from "@src/routes/auth";
 import { WalkRallyModel } from "@src/models/walk-rally.model";
 import { WalkRallyService } from "@src/services/walk-rally.service";
-import { successResponse, tSuccessResponse, isFreshman, AppError, tAppErrors } from "@src/utils";
+import {
+  successResponse,
+  tSuccessResponse,
+  isFreshman,
+  AppError,
+  authSecurity,
+  tAppErrors
+} from "@src/utils";
 
 /**
  * Walk rally routes: workshops/museums/minigame,
@@ -22,6 +29,14 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
     },
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Walk Rally"],
+        summary: "Get an activity's rounds",
+        description:
+          "Round schedule for one activity (workshop/museum/minigame) with per-round capacity " +
+          "and the authenticated freshman's own registration state."
+      },
       params: "WalkRally.ActivityCodeParams",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.getActivityRoundsResponse.Schema()),
@@ -38,6 +53,14 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
     },
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Walk Rally"],
+        summary: "Get my walk-rally status",
+        description:
+          "The authenticated freshman's registrations, attendances, and points across all " +
+          "walk-rally activities."
+      },
       response: {
         200: tSuccessResponse(WalkRallyModel.models.getMeResponse.Schema()),
         ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN", "NOT_FOUND")
@@ -52,6 +75,15 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
     },
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Walk Rally"],
+        summary: "Pre-register for an activity round",
+        description:
+          "Books a slot in one of the 6 shared rounds for an activity. Fails on round " +
+          "conflicts with other registrations, duplicate activity registration, or after the " +
+          "registration window closes."
+      },
       body: "WalkRally.RegisterActivityBody",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.registerActivityResponse.Schema()),
@@ -75,6 +107,12 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
     },
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Walk Rally"],
+        summary: "Cancel my activity registration",
+        description: "Frees the booked slot. Rejected after the registration window closes."
+      },
       params: "WalkRally.ActivityCodeParams",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.unregisterActivityResponse.Schema()),
@@ -97,6 +135,14 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
     },
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Walk Rally"],
+        summary: "Change my registered round",
+        description:
+          "Moves an existing registration to a different round. Same conflict and " +
+          "window rules as registering."
+      },
       params: "WalkRally.ActivityCodeParams",
       body: "WalkRally.ChangeRoundBody",
       response: {
@@ -118,6 +164,15 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
       successResponse(WalkRallyService.checkAttendance(studentId, body)),
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Walk Rally"],
+        summary: "Record an attendance scan",
+        description:
+          "Staff-only (staffRole=walkrally). Marks the scanned freshman as attended for an " +
+          "activity and awards points, up to the points cap. Duplicate scans rejected with " +
+          "ALREADY_CHECKED_IN."
+      },
       body: "WalkRally.CheckAttendanceBody",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.checkAttendanceResponse.Schema()),

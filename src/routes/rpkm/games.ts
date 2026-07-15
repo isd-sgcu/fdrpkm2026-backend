@@ -3,7 +3,14 @@ import { Elysia } from "elysia";
 import { authMiddleware } from "@src/routes/auth";
 import { GamesModel } from "@src/models/games.model";
 import { GamesService } from "@src/services/games.service";
-import { AppError, isFreshman, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
+import {
+  AppError,
+  authSecurity,
+  isFreshman,
+  successResponse,
+  tAppErrors,
+  tSuccessResponse
+} from "@src/utils";
 
 /**
  * RPKM game routes - only for jigsaw and csr except walk rally
@@ -22,6 +29,15 @@ export const gameRoute = new Elysia({ prefix: "/game" })
     },
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Games"],
+        summary: "Get my game progress",
+        description:
+          "Collected vs. total checkpoints for the given game (`jigsaw` or `csr`) for the " +
+          "authenticated freshman. Jigsaw: 10 campus points, 20 Jul – 3 Aug. CSR: ~35 points " +
+          "around Chula, 20 Jul – 7 Aug."
+      },
       params: "Games.GameTypeParams",
       response: {
         200: tSuccessResponse(GamesModel.models.progressResponse.Schema()),
@@ -45,6 +61,15 @@ export const gameRoute = new Elysia({ prefix: "/game" })
     },
     {
       auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Games"],
+        summary: "Collect a game checkpoint",
+        description:
+          "Records a checkpoint scan for the authenticated freshman. Validates the game is " +
+          "open, the checkpoint belongs to the game, the student is inside the geofence, and " +
+          "the checkpoint wasn't already collected."
+      },
       params: "Games.GameTypeParams",
       body: "Games.CollectCheckpointBody",
       response: {
