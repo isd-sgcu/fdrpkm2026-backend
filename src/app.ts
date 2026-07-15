@@ -144,3 +144,5 @@ export const createApp = () =>
     )
     .use(authMiddleware)
     .use(apiRoutes);
+
+export type App = ReturnType<typeof createApp>;
