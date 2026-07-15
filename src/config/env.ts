@@ -30,6 +30,12 @@ export const env = {
   BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || "",
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
+  // Shared secret for the /v1/dev/* endpoints (see src/routes/dev.ts). The
+  // routes are only mounted when NODE_ENV=development, but staging also runs
+  // in development mode on a public URL — so every dev endpoint additionally
+  // requires this value in an `x-dev-key` header. Unset = dev endpoints
+  // always reject (fail closed).
+  DEV_API_KEY: process.env.DEV_API_KEY || "",
   // S3-compatible object storage for uploads (Cloudflare R2 or any S3 API).
   // See docs/upload-guide.md.
   S3_ENDPOINT: process.env.S3_ENDPOINT || "",
