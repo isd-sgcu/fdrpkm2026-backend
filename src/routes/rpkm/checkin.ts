@@ -15,7 +15,7 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
     "/registration",
     async ({ user, body }) => {
       const staffCunetId = user.email?.split("@")[0] ?? "";
-      return successResponse(await RpkmService.checkinRegistration(staffCunetId, body.student_id));
+      return successResponse(RpkmService.checkinRegistration(staffCunetId, body.student_id));
     },
     {
       auth: true,
@@ -36,7 +36,7 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
     "/freshmennight",
     async ({ user, body }) => {
       const staffCunetId = user.email?.split("@")[0] ?? "";
-      return successResponse(await RpkmService.checkinFreshmenNight(staffCunetId, body.student_id));
+      return successResponse(RpkmService.checkinFreshmenNight(staffCunetId, body.student_id));
     },
     {
       auth: true,

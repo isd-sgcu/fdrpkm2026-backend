@@ -20,7 +20,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   .prefix("model", "FdUser.")
   .post(
     "/registration",
-    async ({ user, body }) => successResponse(await FirstDateService.registerFd(user, body)),
+    async ({ user, body }) => successResponse(FirstDateService.registerFd(user, body)),
     {
       auth: true,
       body: "FdUser.RegistrationBody",
@@ -37,7 +37,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
     }
   )
   // Any authenticated user may read their own debloated info (no freshman/staff gate).
-  .get("/me", async ({ user }) => successResponse(await FirstDateService.getMe(user)), {
+  .get("/me", async ({ user }) => successResponse(FirstDateService.getMe(user)), {
     auth: true,
     response: {
       200: tSuccessResponse(FdRegistrationModel.models.meResult.Schema()),
@@ -45,7 +45,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
     }
   })
   // Detailed registration profile prefill
-  .get("/profile", async ({ user }) => successResponse(await FirstDateService.getProfile(user)), {
+  .get("/profile", async ({ user }) => successResponse(FirstDateService.getProfile(user)), {
     auth: true,
     response: {
       200: tSuccessResponse(FdRegistrationModel.models.profileResult.Schema()),
@@ -54,7 +54,7 @@ export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   })
   .patch(
     "/profile",
-    async ({ user, body }) => successResponse(await FirstDateService.updateProfile(user, body)),
+    async ({ user, body }) => successResponse(FirstDateService.updateProfile(user, body)),
     {
       auth: true,
       body: "FdUser.UpdateProfileBody",

@@ -14,8 +14,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
   .prefix("model", "Groups.")
   .post(
     "join",
-    async ({ studentId, body }) =>
-      successResponse(await GroupsService.join(studentId, body.joinCode)),
+    async ({ studentId, body }) => successResponse(GroupsService.join(studentId, body.joinCode)),
     {
       auth: true,
       body: "Groups.JoinBody",
@@ -34,7 +33,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       }
     }
   )
-  .get("me", async ({ studentId }) => successResponse(await GroupsService.getMyGroup(studentId)), {
+  .get("me", async ({ studentId }) => successResponse(GroupsService.getMyGroup(studentId)), {
     auth: true,
     response: {
       200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
@@ -61,7 +60,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
   )
   .get(
     "me/house-preferences",
-    async ({ studentId }) => successResponse(await GroupsService.getHousePreferences(studentId)),
+    async ({ studentId }) => successResponse(GroupsService.getHousePreferences(studentId)),
     {
       auth: true,
       response: {
@@ -73,7 +72,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
   .put(
     "me/house-preferences",
     async ({ studentId, body }) =>
-      successResponse(await GroupsService.setHousePreferences(studentId, body.houseIds)),
+      successResponse(GroupsService.setHousePreferences(studentId, body.houseIds)),
     {
       auth: true,
       body: "Groups.HousePreferencesBody",
@@ -90,7 +89,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       }
     }
   )
-  .delete("me", async ({ studentId }) => successResponse(await GroupsService.leave(studentId)), {
+  .delete("me", async ({ studentId }) => successResponse(GroupsService.leave(studentId)), {
     auth: true,
     response: {
       200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
@@ -100,7 +99,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
   .delete(
     "me/members/:userId",
     async ({ studentId, params }) =>
-      successResponse(await GroupsService.kickMember(studentId, params.userId)),
+      successResponse(GroupsService.kickMember(studentId, params.userId)),
     {
       auth: true,
       params: "Groups.MemberParams",

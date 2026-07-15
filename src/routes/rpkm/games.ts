@@ -18,7 +18,7 @@ export const gameRoute = new Elysia({ prefix: "/game" })
     "/:gameType/progress",
     async ({ studentId, params }) => {
       if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
-      return successResponse(await GamesService.getProgress(studentId, params.gameType));
+      return successResponse(GamesService.getProgress(studentId, params.gameType));
     },
     {
       auth: true,

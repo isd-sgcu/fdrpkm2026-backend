@@ -55,7 +55,7 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
   )
   .post(
     "/confirm",
-    async ({ studentId }) => successResponse(await GroupsService.confirmGroup(studentId)),
+    async ({ studentId }) => successResponse(GroupsService.confirmGroup(studentId)),
     {
       auth: true,
       response: {

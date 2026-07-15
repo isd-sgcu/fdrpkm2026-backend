@@ -22,7 +22,7 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
   .prefix("model", "RpkmUser.")
   .post(
     "/registration",
-    async ({ user, body }) => successResponse(await RpkmService.registerRpkm(user, body)),
+    async ({ user, body }) => successResponse(RpkmService.registerRpkm(user, body)),
     {
       auth: true,
       body: "RpkmUser.RegistrationBody",
@@ -39,7 +39,7 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
     }
   )
   // Any authenticated user may read their own debloated info (no freshman/staff gate).
-  .get("/me", async ({ user }) => successResponse(await RpkmService.getMe(user)), {
+  .get("/me", async ({ user }) => successResponse(RpkmService.getMe(user)), {
     auth: true,
     response: {
       200: tSuccessResponse(RpkmRegistrationModel.models.meResult.Schema()),
@@ -47,7 +47,7 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
     }
   })
   // Detailed registration profile prefill
-  .get("/profile", async ({ user }) => successResponse(await RpkmService.getProfile(user)), {
+  .get("/profile", async ({ user }) => successResponse(RpkmService.getProfile(user)), {
     auth: true,
     response: {
       200: tSuccessResponse(RpkmRegistrationModel.models.profileResult.Schema()),
@@ -56,7 +56,7 @@ export const rpkmUserRoutes = new Elysia({ prefix: "/rpkm/users" })
   })
   .patch(
     "/profile",
-    async ({ user, body }) => successResponse(await RpkmService.updateProfile(user, body)),
+    async ({ user, body }) => successResponse(RpkmService.updateProfile(user, body)),
     {
       auth: true,
       body: "RpkmUser.UpdateProfileBody",
