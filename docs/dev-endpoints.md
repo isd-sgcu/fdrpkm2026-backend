@@ -52,14 +52,25 @@ curl -X POST http://localhost:3000/v1/dev/admin/users \
   }'
 ```
 
+Staff persona holding roles on both projects (creates a firstdate registration
+with `staffRole: "firstdate"` and an rpkm one with `staffRole: "walkrally"`,
+and sets `role: "staff"`):
+
+```bash
+curl -X POST http://localhost:3000/v1/dev/admin/users \
+  -H "x-dev-key: $DEV_API_KEY" -H "content-type: application/json" \
+  -d '{ "studentId": "6512345678", "staffRoles": ["firstdate", "walkrally"] }'
+```
+
 Body fields:
 
-| Field                                 | Notes                                                                                                                                                                                                                                        |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `studentId`                           | 10 chars, becomes the email + QR payload. `69…` = freshman.                                                                                                                                                                                  |
-| `firstName` / `lastName` / `nickname` | Optional, default `Dev` / `<studentId>`.                                                                                                                                                                                                     |
-| `role`                                | `student` (default) or `staff`.                                                                                                                                                                                                              |
-| `registrations`                       | Array of `{ project, staffRole?, withGroup? }`. `project`: `firstdate` \| `rpkm`. `staffRole`: `firstdate` \| `rpkm` \| `walkrally` \| `freshmennight`. rpkm registrations get a solo group like the real flow (`withGroup: false` to skip). |
+| Field                                 | Notes                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `studentId`                           | 10 chars, becomes the email + QR payload. `69…` = freshman.                                                                                                                                                                                                                                                                |
+| `firstName` / `lastName` / `nickname` | Optional, default `Dev` / `<studentId>`.                                                                                                                                                                                                                                                                                   |
+| `role`                                | `student` (default) or `staff`.                                                                                                                                                                                                                                                                                            |
+| `staffRoles`                          | Array of `firstdate` \| `rpkm` \| `walkrally` \| `freshmennight`. Expands into registrations — each role lands on the project whose check-in gate reads it (`firstdate` → firstdate; `rpkm`/`walkrally`/`freshmennight` → rpkm), so at most one role per project. Implies `role: "staff"` unless `role` is set explicitly. |
+| `registrations`                       | Array of `{ project, staffRole?, withGroup? }`. `project`: `firstdate` \| `rpkm`. `staffRole`: `firstdate` \| `rpkm` \| `walkrally` \| `freshmennight`. rpkm registrations get a solo group like the real flow (`withGroup: false` to skip).                                                                               |
 
 ### `POST /v1/dev/impersonate` — become that user
 
