@@ -2,10 +2,12 @@ import { cors } from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 
+import { requestLogger, traceIdFrom } from "@src/plugins/request-logger";
 import { env } from "@src/config";
 import { apiRoutes } from "@src/routes";
 import { authMiddleware } from "@src/routes/auth";
 import { AppError, errorResponse, OpenAPI } from "@src/utils";
+import { logger } from "@src/utils/logger";
 
 // Resolved once at module load (top-level await) so createApp stays sync.
 const authDocs =
@@ -18,7 +20,7 @@ const authDocs =
 
 export const createApp = () =>
   new Elysia()
-    .onError(({ error, code, status }) => {
+    .onError(({ error, code, status, request }) => {
       // Domain errors thrown by services/guards. Checked via instanceof, not
       // the `code` switch: Elysia derives `code` from the thrown error's own
       // `code` property, which for AppError is the domain code ("FORBIDDEN",
@@ -51,12 +53,21 @@ export const createApp = () =>
         case "PARSE":
           return status(400, new Response(error.message, { status: 400 }));
         default:
-          // Unexpected (non-domain) error — keep the standard envelope and
-          // never leak the raw error to the client.
-          console.error("Unexpected error:", error);
+          // Unexpected (non-domain) error — log a structured entry with a
+          // stack (searchable in Cloud Logging), keep the standard envelope,
+          // and never leak the raw error to the client.
+          logger.error("unhandled_error", {
+            traceId: traceIdFrom(request.headers.get("x-cloud-trace-context")),
+            errorMessage: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          });
           return status(500, errorResponse("INTERNAL_SERVER_ERROR"));
       }
     })
+    // Trace id + request-scoped logger + access logging, applied app-wide.
+    // Registered AFTER onError so the access log's onAfterResponse reads the
+    // final status (including statuses the error handler sets above).
+    .use(requestLogger)
     .use(cors())
     // OpenAPI docs (Scalar UI at /openapi) — dev/staging only, not in production.
     .use(

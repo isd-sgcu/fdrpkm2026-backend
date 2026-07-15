@@ -4,6 +4,9 @@ import { Pool } from "pg";
 
 import { env } from "@src/config";
 import * as schema from "@src/db/schema";
+// Direct import (not the "@src/utils" barrel): the barrel pulls in auth.ts,
+// which imports this db module — importing the logger directly avoids the cycle.
+import { logger } from "@src/utils/logger";
 
 const usePGlite = env.NODE_ENV === "development" && !env.DATABASE_URL;
 
@@ -15,7 +18,10 @@ const usePGlite = env.NODE_ENV === "development" && !env.DATABASE_URL;
 const createPgPool = (): Pool => {
   const pool = new Pool({ connectionString: env.DATABASE_URL });
   pool.on("error", (err) => {
-    console.error("[db] idle postgres client error:", err);
+    logger.error("db.idle_client_error", {
+      errorMessage: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined
+    });
   });
   return pool;
 };
