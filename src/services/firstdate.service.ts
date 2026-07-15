@@ -4,7 +4,6 @@ import { db } from "@src/db";
 import {
   getRegistrationMe,
   getRegistrationProfile,
-  RegistrationServiceError,
   submitRegistration,
   updateRegistrationProfile,
   type AuthUser,
@@ -107,7 +106,6 @@ const checkinFirstDate = (staffCunetId: string, studentCunetId: string) =>
 // class is the shared registration core's; the alias keeps the route's
 // instanceof check stable.
 export const FirstDateService = {
-  FirstDateServiceError: RegistrationServiceError,
   registerFd,
   getMe,
   getProfile,

@@ -47,7 +47,8 @@ export const GroupsModel = new Elysia().model({
       title: "House IDs",
       description: "Ranked house IDs, most preferred first (rank = index + 1)",
       minItems: 1,
-      maxItems: 5
+      maxItems: 5,
+      uniqueItems: true
     })
   }),
   housePreferencesResponse: t.Object({

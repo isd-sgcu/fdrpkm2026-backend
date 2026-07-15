@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 // Import should be prefixed with @src/ to avoid relative path hell
-import { errorResponse, tErrorResponse } from "@src/utils";
+import { AppError, tAppErrors } from "@src/utils";
 import { ExampleModel } from "@src/models/example.model";
 import { ExampleService } from "@src/services/example.service";
 import { authMiddleware } from "@src/routes/auth";
@@ -15,11 +15,14 @@ import { authMiddleware } from "@src/routes/auth";
  *                 and src/models/example.model.ts (request/response DTOs)
  *   View       -> the `response` schemas below (they define the JSON shape
  *                 returned to the client — there's no template/HTML view)
- *   Controller -> this file: auth guard -> validate -> call service ->
- *                 translate result/error into an HTTP response
+ *   Controller -> this file: auth guard -> validate -> call service
  *
- * Routes should stay thin. If a handler is doing more than a couple of
- * lines of logic, that logic belongs in the service, not here.
+ * Routes should stay thin. Business failures are signalled by throwing
+ * `AppError(code)` (from guards here or from the service) — the global
+ * onError handler in src/app.ts maps the code to its HTTP status and the
+ * standard `{ success: false, error: { code, context? } }` envelope. The
+ * `...tAppErrors(codes)` spread declares those codes in the response schema
+ * (for OpenAPI docs), deriving each status from AppErrorCode.
  */
 // eslint-disable-next-line drizzle/enforce-delete-with-where -- flags the whole chain below for its .delete(...) route method (not a Drizzle query)
 export const exampleRoutes = new Elysia({ prefix: "/example" })
@@ -34,47 +37,39 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
   // Go to http://localhost:3000/openapi#GET/v1/example/user/{userId} for OpenAPI docs and try it out
   .get(
     "/user/:userId",
-    ({ auth, status, params }) => {
-      if (!auth.user)
-        return status(401, errorResponse("UNAUTHORIZED", { message: "Login required" }));
-      if (auth.user.userId !== params.userId)
-        // 403 schema below has no context, so no message here either — keep in sync.
-        return status(403, errorResponse("FORBIDDEN"));
+    ({ auth, params }) => {
+      if (!auth.user) throw new AppError("UNAUTHORIZED");
+      if (auth.user.userId !== params.userId) throw new AppError("FORBIDDEN");
 
-      try {
-        // Controller delegates the actual lookup to the service (Model
-        // layer) instead of querying storage itself.
-        return ExampleService.getExampleUser(params.userId);
-      } catch (err) {
-        if (err instanceof ExampleService.ExampleServiceError)
-          return status(404, errorResponse("NOT_FOUND"));
-        throw err;
-      }
+      // Controller delegates the actual lookup to the service (Model layer)
+      // instead of querying storage itself. If the user doesn't exist the
+      // service throws AppError("NOT_FOUND") — no try/catch needed here.
+      return ExampleService.getExampleUser(params.userId);
     },
     {
       params: "Example.UserUpdateParams",
       response: {
         200: "Example.UserUpdateBody",
-        401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() })),
-        403: tErrorResponse("FORBIDDEN"),
-        404: tErrorResponse("NOT_FOUND")
+        // Error codes defined in AppErrorCode enum in src/utils/error.ts;
+        // statuses (400/401/403/404) derive from the codes automatically.
+        // VALIDATION covers params/body schema failures (rejected by Elysia
+        // before the handler; wrapped into the envelope by onError).
+        ...tAppErrors("VALIDATION", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND")
       }
     }
   )
   // Go to http://localhost:3000/openapi#POST/v1/example/user/{userId} for OpenAPI docs and try it out
   .post(
     "/user/:userId",
-    ({ auth, status, params, body, studentId }) => {
-      if (!auth.user)
-        return status(401, errorResponse("UNAUTHORIZED", { message: "Login required" }));
-      if (auth.user.userId !== params.userId)
-        // message here is just and example data that can be returned to user, but the 403 schema below has no context, so no message here either — keep in sync.
-        return status(403, errorResponse("FORBIDDEN"));
+    ({ auth, params, body, studentId }) => {
+      if (!auth.user) throw new AppError("UNAUTHORIZED");
+      if (auth.user.userId !== params.userId) throw new AppError("FORBIDDEN");
+      // Non-registered codes may attach free-form context; it's returned in
+      // the envelope's `error.context`.
       if (!studentId.startsWith("69"))
-        return status(
-          403,
-          errorResponse("NOT_FRESHMEN", { message: "Only freshmen can update their information" })
-        );
+        throw new AppError("NOT_FRESHMEN", {
+          message: "Only freshmen can update their information"
+        });
 
       // Controller stays thin: validate + auth here, everything else
       // (persistence, business rules) lives in the service.
@@ -90,49 +85,35 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       // Type-safe response and OpenAPI Spec generation is Goood
       response: {
         200: "Example.UserUpdateBody", // Type-safe response body, auto api doc and also auto validation
-
-        // Error code defined in AppErrorCode enum in src/utils/error.ts
-        401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() })),
-        403: t.Union([tErrorResponse("FORBIDDEN"), tErrorResponse("NOT_FRESHMEN")])
+        // NOT_FRESHMEN and FORBIDDEN share 403 — tAppErrors unions them.
+        ...tAppErrors("VALIDATION", "UNAUTHORIZED", "FORBIDDEN", "NOT_FRESHMEN")
       }
     }
   )
   // Go to http://localhost:3000/openapi#DELETE/v1/example/user/{userId} for OpenAPI docs and try it out
-  // Second instanceof-check example: same guard-then-service-then-map-error
-  // shape as the GET above, different error code (still NOT_FOUND here, but
-  // swap in USER_ALREADY_EXISTS/BAD_REQUEST for other business rules).
   .delete(
     "/user/:userId",
     ({ auth, status, params }) => {
-      if (!auth.user)
-        return status(401, errorResponse("UNAUTHORIZED", { message: "Login required" }));
-      if (auth.user.userId !== params.userId) return status(403, errorResponse("FORBIDDEN"));
+      if (!auth.user) throw new AppError("UNAUTHORIZED");
+      if (auth.user.userId !== params.userId) throw new AppError("FORBIDDEN");
 
-      try {
-        ExampleService.deleteExampleUser(params.userId);
-        return status(204, undefined);
-      } catch (err) {
-        if (err instanceof ExampleService.ExampleServiceError)
-          return status(404, errorResponse("NOT_FOUND"));
-        throw err;
-      }
+      // Throws AppError("NOT_FOUND") when there's nothing to delete.
+      ExampleService.deleteExampleUser(params.userId);
+      return status(204, undefined);
     },
     {
       params: "Example.UserUpdateParams",
       response: {
         204: t.Void(),
-        401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() })),
-        403: tErrorResponse("FORBIDDEN"),
-        404: tErrorResponse("NOT_FOUND")
+        ...tAppErrors("VALIDATION", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND")
       }
     }
   )
   // Example protected route with auth macro. The auth macro is available as `ctx.auth` in handlers.
   .post(
     "/protected",
-    ({ auth, status }) => {
-      if (!auth.user)
-        return status(401, errorResponse("UNAUTHORIZED", { message: "Login required" }));
+    ({ auth }) => {
+      if (!auth.user) throw new AppError("UNAUTHORIZED");
 
       return { message: `Hello ${auth.user.userId}, you are authorized!` };
     },
@@ -140,7 +121,7 @@ export const exampleRoutes = new Elysia({ prefix: "/example" })
       // ADD THIS TO ACTIVATE AUTH MACRO IN HANDLER.
       response: {
         200: t.Object({ message: t.String() }),
-        401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() }))
+        ...tAppErrors("UNAUTHORIZED")
       }
     }
   );

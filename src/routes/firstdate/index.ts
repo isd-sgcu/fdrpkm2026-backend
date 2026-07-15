@@ -1,7 +1,5 @@
-import { Elysia, t } from "elysia";
-import { tErrorResponse } from "@src/utils";
+import { Elysia } from "elysia";
 import { authMiddleware } from "@src/routes/auth";
-import { FirstDateService } from "@src/services/firstdate.service";
 import { fdCheckinRoutes } from "./checkin";
 
 /**
@@ -10,16 +8,4 @@ import { fdCheckinRoutes } from "./checkin";
  */
 export const firstdateRoutes = new Elysia({ prefix: "/fd" })
   .use(authMiddleware)
-  .use(fdCheckinRoutes)
-  .get("/", ({ user }) => FirstDateService.getFirstDateProfile(user), {
-    auth: true,
-    response: {
-      200: t.Object({
-        name: t.String({
-          title: "Name",
-          example: ["John Doe", "Jane Doe"]
-        })
-      }),
-      401: tErrorResponse("UNAUTHORIZED", t.Object({ message: t.String() }))
-    }
-  });
+  .use(fdCheckinRoutes);

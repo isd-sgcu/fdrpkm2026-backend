@@ -17,26 +17,57 @@ import { prefixEnum, vehicleEnum } from "@src/db/schema";
 const enumSchema = <T extends readonly string[]>(values: T, title: string) =>
   t.Enum(Object.fromEntries(values.map((v) => [v, v])) as { [K in T[number]]: K }, { title });
 
+type Vehicle = (typeof vehicleEnum.enumValues)[number];
+const NON_OTHER_VEHICLES = vehicleEnum.enumValues.filter(
+  (v): v is Exclude<Vehicle, "other"> => v !== "other"
+);
+
 export const registrationFields = () => {
   const vehicle = enumSchema(vehicleEnum.enumValues, "Vehicle");
   const prefix = enumSchema(prefixEnum.enumValues, "Prefix");
 
-  // One travel leg. Full-form contract: every field required + non-null EXCEPT
-  // `vehicleOther` (conditional: required iff vehicle === 'other', DB CHECK).
-  const travelLegInput = t.Object({
-    vehicle,
-    vehicleOther: t.Optional(t.Nullable(t.String())),
+  // Fields shared by every travel leg regardless of vehicle. Factory — fresh
+  // nodes per call, same reason as registrationFields itself.
+  const travelLegPlaces = () => ({
     originDistrict: t.String({ title: "Origin district" }),
     originProvince: t.String({ title: "Origin province" }),
     destinationDistrict: t.String({ title: "Destination district" }),
     destinationProvince: t.String({ title: "Destination province" })
   });
 
+  // One travel leg. `vehicleOther` is required (non-blank) iff vehicle is
+  // 'other' — expressed as a union so body validation enforces it at the
+  // route boundary (mirrors the DB CHECK); the service doesn't re-check.
+  const travelLegInput = t.Union(
+    [
+      t.Object({
+        vehicle: enumSchema(NON_OTHER_VEHICLES, "Vehicle"),
+        vehicleOther: t.Optional(t.Nullable(t.String())),
+        ...travelLegPlaces()
+      }),
+      t.Object({
+        vehicle: t.Literal("other", { title: "Vehicle" }),
+        vehicleOther: t.String({
+          pattern: "\\S",
+          title: "Vehicle (other)",
+          description: "Required (non-blank) when vehicle is 'other'."
+        }),
+        ...travelLegPlaces()
+      })
+    ],
+    { title: "Travel leg" }
+  );
+
   // Full-form POST body: every field required + non-null (send "" for blanks).
   // Profile fields write to `students`; student_id/email stay derived from auth.
   // travelLegs: 1..4 (DB CHECK seq in (1,2,3,4)).
+  // Business-rule shapes (pdpaConsent must be true, leg count, vehicleOther)
+  // are enforced HERE by validation, not re-checked in the service.
   const registrationBody = t.Object({
-    pdpaConsent: t.Boolean({ title: "PDPA consent", description: "Must be true to register." }),
+    pdpaConsent: t.Literal(true, {
+      title: "PDPA consent",
+      description: "Must be true to register."
+    }),
     prefix,
     firstName: t.String({ title: "First name" }),
     lastName: t.String({ title: "Last name" }),

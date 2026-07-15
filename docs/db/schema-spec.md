@@ -101,13 +101,17 @@ Dates/flags are fixed → hardcoded config constant per frontend. Change = redep
 
 ```ts
 const GAMES = {
+  // display names: jigsaw = "Chula Jigsaw", csr = "Chula QR Quest"
   jigsaw: { open: "2026-07-20", close: "2026-08-03", yearOneOnly: true, requireGps: true },
   csr: { open: "2026-07-20", close: "2026-08-07", yearOneOnly: true, requireGps: true }
 };
-const HOUSE_REG = { open: "2026-07-18T00:00+07", close: "2026-07-22" };
+const HOUSE_REG = { open: "2026-07-18T00:00+07", close: "2026-07-21T23:59+07" };
 const STATIC = {
-  field_trip: { open: "…", close: "…", formUrl: "…" },
-  my_freshy_story: { open: "…", close: "…", formUrl: "…" }
+  // field-trip reg is shared by all routes; closes early if a trip fills up
+  // (capacity lives on the gg-form side). Trip days per route: สามย่าน 22–25/7;
+  // รักโลก plant walk 22 & 23/7, trashvenger 24 & 27/7; จุฬาฯ 25–26 & 28–29/7.
+  field_trip: { open: "2026-07-18", close: "2026-07-20", formUrl: "…" },
+  my_freshy_story: { open: "2026-07-22", close: "2026-08-03", formUrl: "…" }
 };
 const FD_EVENT_VISIBLE = true; // flip false + redeploy after the 18th
 const WALK_RALLY = {
@@ -303,13 +307,17 @@ group_house_choices
 | feature                     | window                  | flags                                                            |
 | --------------------------- | ----------------------- | ---------------------------------------------------------------- |
 | event entry scans (entries) | per event               | FD_EVENT_VISIBLE toggles home button                             |
-| house reg                   | 18/7 00:00 – 22/7       | —                                                                |
-| jigsaw                      | 20/7 – 3/8              | year-one, 10 checkpoints, requireGps                             |
-| csr                         | 20/7 – 7/8              | year-one, ~35 checkpoints, requireGps                            |
-| field_trip                  | per calendar            | year-one, gg form                                                |
-| my_freshy_story             | per calendar            | year-one, gg form                                                |
+| house reg (choosing)        | 18/7 00:00 – 21/7 23:59 | —                                                                |
+| house result announce       | 23/7 →                  | —                                                                |
+| house activities            | 1/8 – 2/8               | —                                                                |
+| jigsaw (Chula Jigsaw)       | 20/7 – 3/8              | year-one, 10 checkpoints, requireGps                             |
+| csr (Chula QR Quest)        | 20/7 – 7/8              | year-one, ~35 checkpoints, requireGps                            |
+| field_trip reg              | 18/7 – 20/7 (or full)   | year-one, gg form; trips per route\*                             |
+| my_freshy_story             | 22/7 – 3/8              | year-one, gg form                                                |
 | walk rally reg              | 22/7 00:00 – 29/7 23:59 | fcfs, uncapped (30/slot planned, not enforced), edit until close |
 | walk rally scans            | 31/7 12:00–16:00        | staff scan per slot, walk-in included                            |
+
+\* field-trip days per route: เส้นทางชุมชนสามย่าน 22–25/7 · เส้นทางรักโลก plant walk 22 & 23/7, trashvenger 24 & 27/7 · เส้นทางจุฬาฯ 25–26 & 28–29/7.
 
 ## Out of scope / skipped (YAGNI)
 

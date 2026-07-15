@@ -4,7 +4,6 @@ import { db } from "@src/db";
 import {
   getRegistrationMe,
   getRegistrationProfile,
-  RegistrationServiceError,
   submitRegistration,
   updateRegistrationProfile,
   type AuthUser,
@@ -105,7 +104,6 @@ const checkinFreshmenNight = (staffCunetId: string, studentCunetId: string) =>
 // the shared registration core's; the alias keeps the route's instanceof
 // check stable.
 export const RpkmService = {
-  RpkmServiceError: RegistrationServiceError,
   registerRpkm,
   getMe,
   getProfile,

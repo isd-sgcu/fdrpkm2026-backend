@@ -16,5 +16,4 @@ export const rpkmRoutes = new Elysia({ prefix: "/rpkm" })
   .use(groupRoute)
   .use(houseRoute)
   .use(gameRoute)
-  .use(walkRallyRoute)
-  .get("/", () => ({ project: "rpkm" }), { auth: true });
+  .use(walkRallyRoute);

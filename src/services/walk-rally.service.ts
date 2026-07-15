@@ -7,10 +7,10 @@ import {
   walkRallyAttendances,
   walkRallyRegistrations
 } from "@src/db/schema";
-import type { AppErrorCode } from "@src/utils";
+import { AppError, type AppErrorCode } from "@src/utils";
 import { isEventActive, isEventPassed } from "@src/utils/flags";
 import { WALK_RALLY } from "@src/constants";
-import { CheckinError, assertStaffForProject } from "@src/services/checkin.helper";
+import { assertStaffForProject } from "@src/services/checkin.helper";
 
 // Constant
 export type WalkRallyDeps = { db?: Database };
@@ -451,7 +451,7 @@ const checkAttendance = async (
   try {
     staff = await assertStaffForProject({ staffCunetId, project: "walkrally" }, { db: database });
   } catch (err) {
-    if (err instanceof CheckinError) throw new WalkRallyServiceError(err.code, err.context);
+    if (err instanceof AppError) throw new WalkRallyServiceError(err.code, err.context);
     throw err;
   }
 

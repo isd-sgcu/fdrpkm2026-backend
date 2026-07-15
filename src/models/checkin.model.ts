@@ -1,3 +1,4 @@
+import { tSuccessResponse } from "@src/utils";
 import { Elysia, t } from "elysia";
 
 const entry = t.Object({
@@ -10,17 +11,12 @@ const entry = t.Object({
   updatedAt: t.Date({ title: "Updated At" })
 });
 
-const alreadyCheckedInContext = t.Object({
-  scannedAt: t.Date(),
-  scannedBy: t.String({ format: "uuid" })
-});
-
 const checkinBody = t.Object({
   student_id: t.String({ minLength: 1 })
 });
 
 export const CheckinModel = new Elysia().model({
   Entry: entry,
-  AlreadyCheckedInContext: alreadyCheckedInContext,
-  CheckinBody: checkinBody
+  CheckinBody: checkinBody,
+  SuccessCheckinResponse: tSuccessResponse(entry)
 });

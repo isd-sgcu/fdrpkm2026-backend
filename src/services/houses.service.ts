@@ -1,6 +1,6 @@
 import { count, eq, isNotNull } from "drizzle-orm";
 
-import { type AppErrorCode, isFreshman } from "@src/utils";
+import { AppError, isFreshman } from "@src/utils";
 import { db as defaultDb, type Database } from "@src/db";
 import { groupHouseChoices, houses, registrations, type House } from "@src/db/schema";
 import { isEventActive } from "@src/utils/flags";
@@ -15,13 +15,6 @@ import { GroupsService } from "@src/services/groups.service";
 
 export type HousesDeps = { db?: Database };
 
-/** Thrown on expected business failures; controller maps `code` to an HTTP status. */
-class HousesServiceError extends Error {
-  constructor(public code: AppErrorCode) {
-    super(code);
-  }
-}
-
 /** All houses. */
 const listHouses = (deps: HousesDeps = {}): Promise<House[]> => {
   const database = deps.db ?? defaultDb;
@@ -31,12 +24,12 @@ const listHouses = (deps: HousesDeps = {}): Promise<House[]> => {
 /**
  * A single house by id.
  * @param id `houses.id` (uuid)
- * @throws {HousesServiceError} NOT_FOUND if no `houses` row matches
+ * @throws {AppError} NOT_FOUND if no `houses` row matches
  */
 const getHouse = async (id: string, deps: HousesDeps = {}): Promise<House> => {
   const database = deps.db ?? defaultDb;
   const [house] = await database.select().from(houses).where(eq(houses.id, id));
-  if (!house) throw new HousesServiceError("NOT_FOUND");
+  if (!house) throw new AppError("NOT_FOUND");
 
   return house;
 };
@@ -90,20 +83,14 @@ const getHouseStats = async (deps: HousesDeps = {}): Promise<HouseStat[]> => {
  * @returns null if the group never got one (never picked houses, or
  *   registered/picked after the deadline — the draw skips both, so
  *   `assignedHouseId` stays null either way)
- * @throws {HousesServiceError} NOT_FRESHMEN, RESULT_NOT_ANNOUNCED if before
+ * @throws {AppError} NOT_FRESHMEN, RESULT_NOT_ANNOUNCED if before
  *   the announce time, NOT_FOUND if the student or their group can't be resolved
  */
 const getHouseResult = async (studentId: string, deps: HousesDeps = {}): Promise<House | null> => {
-  if (!isFreshman(studentId)) throw new HousesServiceError("NOT_FRESHMEN");
-  if (!isEventActive("rpkm_house_result")) throw new HousesServiceError("RESULT_NOT_ANNOUNCED");
+  if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
+  if (!isEventActive("rpkm_house_result")) throw new AppError("RESULT_NOT_ANNOUNCED");
 
-  let group;
-  try {
-    ({ group } = await GroupsService.getCurrentGroup(studentId, deps));
-  } catch (err) {
-    if (err instanceof GroupsService.GroupsServiceError) throw new HousesServiceError(err.code);
-    throw err;
-  }
+  const { group } = await GroupsService.getCurrentGroup(studentId, deps);
   if (!group.assignedHouseId) return null;
 
   return getHouse(group.assignedHouseId, deps);
@@ -112,7 +99,6 @@ const getHouseResult = async (studentId: string, deps: HousesDeps = {}): Promise
 // Namespace object — routes call `HousesService.<fn>(...)` instead of
 // importing individual functions.
 export const HousesService = {
-  HousesServiceError,
   listHouses,
   getHouse,
   getHouseStats,

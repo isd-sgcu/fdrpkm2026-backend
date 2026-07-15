@@ -143,30 +143,8 @@ describe("registerFd — travel legs", () => {
   });
 });
 
-describe("registerFd — validation", () => {
-  it("rejects when pdpaConsent is not true (PDPA_REQUIRED)", async () => {
-    await expect(
-      registerFd(authUser(), validInput({ pdpaConsent: false }), injected())
-    ).rejects.toMatchObject({ code: "PDPA_REQUIRED" });
-    expect(await db.select().from(schema.students)).toHaveLength(0);
-  });
-
-  it("rejects zero travel legs", async () => {
-    await expect(
-      registerFd(authUser(), { pdpaConsent: true, travelLegs: [] }, injected())
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("rejects more than 4 travel legs", async () => {
-    await expect(
-      registerFd(
-        authUser(),
-        validInput({ travelLegs: [leg(), leg(), leg(), leg(), leg()] }),
-        injected()
-      )
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-});
+// Body-shape validation (pdpaConsent, leg count, vehicleOther) moved to the
+// route body schema — see registration-body.test.ts.
 
 describe("registerFd — insert-only", () => {
   it("rejects a second FirstDate registration (ALREADY_REGISTERED)", async () => {

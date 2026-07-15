@@ -1,15 +1,9 @@
-import { Elysia, t } from "elysia";
+import { Elysia } from "elysia";
 
 import { authMiddleware } from "@src/routes/auth";
 import { WalkRallyModel } from "@src/models/walk-rally.model";
 import { WalkRallyService } from "@src/services/walk-rally.service";
-import {
-  errorResponse,
-  successResponse,
-  tErrorResponse,
-  tSuccessResponse,
-  isFreshman
-} from "@src/utils";
+import { successResponse, tSuccessResponse, isFreshman, AppError, tAppErrors } from "@src/utils";
 
 /**
  * Walk rally routes: workshops/museums/minigame,
@@ -22,156 +16,84 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
   .prefix("model", "WalkRally.")
   .get(
     "/activities/:code/rounds",
-    async ({ studentId, status, params }) => {
-      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
-
-      try {
-        return successResponse(await WalkRallyService.getActivityRounds(studentId, params.code));
-      } catch (err) {
-        if (err instanceof WalkRallyService.WalkRallyServiceError) {
-          switch (err.code) {
-            case "INVALID_ACTIVITY":
-              return status(404, errorResponse("INVALID_ACTIVITY"));
-            default:
-              return status(404, errorResponse("NOT_FOUND"));
-          }
-        }
-        throw err;
-      }
+    async ({ studentId, params }) => {
+      if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
+      return successResponse(WalkRallyService.getActivityRounds(studentId, params.code));
     },
     {
       auth: true,
       params: "WalkRally.ActivityCodeParams",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.getActivityRoundsResponse.Schema()),
-        401: tErrorResponse("UNAUTHORIZED"),
-        403: tErrorResponse("NOT_FRESHMEN"),
-        404: t.Union([tErrorResponse("INVALID_ACTIVITY"), tErrorResponse("NOT_FOUND")])
+        ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN", "INVALID_ACTIVITY", "NOT_FOUND")
       }
     }
   )
   .get(
     "/me",
-    async ({ studentId, status }) => {
-      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
+    async ({ studentId }) => {
+      if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
 
-      try {
-        return successResponse(await WalkRallyService.getMe(studentId));
-      } catch (err) {
-        if (err instanceof WalkRallyService.WalkRallyServiceError) {
-          return status(404, errorResponse("NOT_FOUND"));
-        }
-        throw err;
-      }
+      return successResponse(WalkRallyService.getMe(studentId));
     },
     {
       auth: true,
       response: {
         200: tSuccessResponse(WalkRallyModel.models.getMeResponse.Schema()),
-        401: tErrorResponse("UNAUTHORIZED"),
-        403: tErrorResponse("NOT_FRESHMEN"),
-        404: tErrorResponse("NOT_FOUND")
+        ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN", "NOT_FOUND")
       }
     }
   )
   .post(
     "/registrations",
-    async ({ studentId, status, body }) => {
-      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
-
-      try {
-        return successResponse(await WalkRallyService.registerForActivity(studentId, body));
-      } catch (err) {
-        if (err instanceof WalkRallyService.WalkRallyServiceError) {
-          switch (err.code) {
-            case "REGISTRATION_CLOSED":
-              return status(403, errorResponse("REGISTRATION_CLOSED"));
-            case "INVALID_ACTIVITY":
-              return status(404, errorResponse("INVALID_ACTIVITY"));
-            case "ACTIVITY_ALREADY_REGISTERED":
-              return status(409, errorResponse("ACTIVITY_ALREADY_REGISTERED"));
-            case "ROUND_CONFLICT":
-              return status(409, errorResponse("ROUND_CONFLICT"));
-            default:
-              return status(404, errorResponse("NOT_FOUND"));
-          }
-        }
-        throw err;
-      }
+    async ({ studentId, body }) => {
+      if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
+      return successResponse(WalkRallyService.registerForActivity(studentId, body));
     },
     {
       auth: true,
       body: "WalkRally.RegisterActivityBody",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.registerActivityResponse.Schema()),
-        401: tErrorResponse("UNAUTHORIZED"),
-        403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("REGISTRATION_CLOSED")]),
-        404: t.Union([tErrorResponse("INVALID_ACTIVITY"), tErrorResponse("NOT_FOUND")]),
-        409: t.Union([
-          tErrorResponse("ACTIVITY_ALREADY_REGISTERED"),
-          tErrorResponse("ROUND_CONFLICT")
-        ])
+        ...tAppErrors(
+          "UNAUTHORIZED",
+          "NOT_FRESHMEN",
+          "REGISTRATION_CLOSED",
+          "INVALID_ACTIVITY",
+          "NOT_FOUND",
+          "ACTIVITY_ALREADY_REGISTERED",
+          "ROUND_CONFLICT"
+        )
       }
     }
   )
   .delete(
     "/registrations/:code",
-    async ({ studentId, status, params }) => {
-      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
-
-      try {
-        return successResponse(
-          await WalkRallyService.unregisterFromActivity(studentId, params.code)
-        );
-      } catch (err) {
-        if (err instanceof WalkRallyService.WalkRallyServiceError) {
-          switch (err.code) {
-            case "REGISTRATION_CLOSED":
-              return status(403, errorResponse("REGISTRATION_CLOSED"));
-            case "INVALID_ACTIVITY":
-              return status(404, errorResponse("INVALID_ACTIVITY"));
-            default:
-              return status(404, errorResponse("NOT_FOUND"));
-          }
-        }
-        throw err;
-      }
+    async ({ studentId, params }) => {
+      if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
+      return successResponse(WalkRallyService.unregisterFromActivity(studentId, params.code));
     },
     {
       auth: true,
       params: "WalkRally.ActivityCodeParams",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.unregisterActivityResponse.Schema()),
-        401: tErrorResponse("UNAUTHORIZED"),
-        403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("REGISTRATION_CLOSED")]),
-        404: t.Union([tErrorResponse("INVALID_ACTIVITY"), tErrorResponse("NOT_FOUND")])
+        ...tAppErrors(
+          "UNAUTHORIZED",
+          "NOT_FRESHMEN",
+          "REGISTRATION_CLOSED",
+          "INVALID_ACTIVITY",
+          "NOT_FOUND"
+        )
       }
     }
   )
   .patch(
     "/registrations/:code",
-    async ({ studentId, status, params, body }) => {
-      if (!isFreshman(studentId)) return status(403, errorResponse("NOT_FRESHMEN"));
+    async ({ studentId, params, body }) => {
+      if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
 
-      try {
-        return successResponse(
-          await WalkRallyService.changeRound(studentId, params.code, body.round)
-        );
-      } catch (err) {
-        if (err instanceof WalkRallyService.WalkRallyServiceError) {
-          switch (err.code) {
-            case "REGISTRATION_CLOSED":
-              return status(403, errorResponse("REGISTRATION_CLOSED"));
-            case "INVALID_ACTIVITY":
-              return status(404, errorResponse("INVALID_ACTIVITY"));
-            case "ROUND_CONFLICT":
-              return status(409, errorResponse("ROUND_CONFLICT"));
-            default:
-              return status(404, errorResponse("NOT_FOUND"));
-          }
-        }
-        throw err;
-      }
+      return successResponse(WalkRallyService.changeRound(studentId, params.code, body.round));
     },
     {
       auth: true,
@@ -179,55 +101,34 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
       body: "WalkRally.ChangeRoundBody",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.registerActivityResponse.Schema()),
-        401: tErrorResponse("UNAUTHORIZED"),
-        403: t.Union([tErrorResponse("NOT_FRESHMEN"), tErrorResponse("REGISTRATION_CLOSED")]),
-        404: t.Union([tErrorResponse("INVALID_ACTIVITY"), tErrorResponse("NOT_FOUND")]),
-        409: tErrorResponse("ROUND_CONFLICT")
+        ...tAppErrors(
+          "UNAUTHORIZED",
+          "NOT_FRESHMEN",
+          "REGISTRATION_CLOSED",
+          "INVALID_ACTIVITY",
+          "NOT_FOUND",
+          "ROUND_CONFLICT"
+        )
       }
     }
   )
   .post(
     "/attendances",
-    async ({ user, status, body }) => {
-      const staffCunetId = user.email?.split("@")[0] ?? "";
-
-      try {
-        return successResponse(await WalkRallyService.checkAttendance(staffCunetId, body));
-      } catch (err) {
-        if (err instanceof WalkRallyService.WalkRallyServiceError) {
-          switch (err.code) {
-            case "FORBIDDEN_NOT_STAFF":
-              return status(403, errorResponse("FORBIDDEN_NOT_STAFF"));
-            case "STUDENT_NOT_FOUND":
-              return status(404, errorResponse("STUDENT_NOT_FOUND"));
-            case "INVALID_ACTIVITY":
-              return status(404, errorResponse("INVALID_ACTIVITY"));
-            case "ALREADY_CHECKED_IN":
-              return status(409, errorResponse("ALREADY_CHECKED_IN", err.context));
-            case "POINTS_CAP_REACHED":
-              return status(409, errorResponse("POINTS_CAP_REACHED"));
-            default:
-              throw err;
-          }
-        }
-        throw err;
-      }
-    },
+    async ({ studentId, body }) =>
+      successResponse(WalkRallyService.checkAttendance(studentId, body)),
     {
       auth: true,
       body: "WalkRally.CheckAttendanceBody",
       response: {
         200: tSuccessResponse(WalkRallyModel.models.checkAttendanceResponse.Schema()),
-        401: tErrorResponse("UNAUTHORIZED"),
-        403: tErrorResponse("FORBIDDEN_NOT_STAFF"),
-        404: t.Union([tErrorResponse("STUDENT_NOT_FOUND"), tErrorResponse("INVALID_ACTIVITY")]),
-        409: t.Union([
-          tErrorResponse(
-            "ALREADY_CHECKED_IN",
-            WalkRallyModel.models.checkAttendanceResponse.Schema()
-          ),
-          tErrorResponse("POINTS_CAP_REACHED")
-        ])
+        ...tAppErrors(
+          "UNAUTHORIZED",
+          "FORBIDDEN_NOT_STAFF",
+          "STUDENT_NOT_FOUND",
+          "INVALID_ACTIVITY",
+          "ALREADY_CHECKED_IN",
+          "POINTS_CAP_REACHED"
+        )
       }
     }
   );
