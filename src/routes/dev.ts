@@ -49,8 +49,19 @@ const tStaffRole = t.Union([
   t.Literal("walkrally"),
   t.Literal("freshmennight")
 ]);
+type StaffRole = "firstdate" | "rpkm" | "walkrally" | "freshmennight";
+
+// Which project's registration row carries each staff role — same mapping the
+// check-in gate uses (see services/checkin.helper.ts STAFF_GATE).
+const STAFF_ROLE_PROJECT: Record<StaffRole, "firstdate" | "rpkm"> = {
+  firstdate: "firstdate",
+  rpkm: "rpkm",
+  walkrally: "rpkm",
+  freshmennight: "rpkm"
+};
+
 const tStudentIdParam = t.String({
-  pattern: "^[0-9a-zA-Z]{10}$",
+  pattern: "^[0-9]{10}$",
   description: "CUNET id — becomes <studentId>@student.chula.ac.th",
   examples: ["6912345678"]
 });
@@ -170,6 +181,30 @@ export const createDevRoutes = (database: Database = db) =>
         const firstName = body.firstName ?? "Dev";
         const lastName = body.lastName ?? studentId;
 
+        // `staffRoles` expands into registrations: each role lands on the
+        // project whose check-in gate reads it (one registration per project,
+        // so at most one role per project — the DB column is a single enum).
+        const regs: {
+          project: "firstdate" | "rpkm";
+          staffRole?: StaffRole;
+          withGroup?: boolean;
+        }[] = (body.registrations ?? []).map((reg) => ({ ...reg }));
+        for (const role of body.staffRoles ?? []) {
+          const project = STAFF_ROLE_PROJECT[role];
+          const existing = regs.find((reg) => reg.project === project);
+          if (!existing) {
+            regs.push({ project, staffRole: role });
+          } else if (existing.staffRole && existing.staffRole !== role) {
+            throw new AppError("BAD_REQUEST", {
+              message: `staff roles "${existing.staffRole}" and "${role}" both live on the ${project} registration — one role per project`
+            });
+          } else {
+            existing.staffRole = role;
+          }
+        }
+        // A persona holding staff roles must be role=staff to pass the gate.
+        const role = body.role ?? (regs.some((reg) => reg.staffRole) ? "staff" : "student");
+
         const { authUser, created } = await ensureAuthUser(email, `${firstName} ${lastName}`);
 
         const result = await database.transaction(async (tx) => {
@@ -181,7 +216,7 @@ export const createDevRoutes = (database: Database = db) =>
               firstName,
               lastName,
               nickname: body.nickname,
-              role: body.role ?? "student"
+              role
             })
             .onConflictDoUpdate({
               target: students.studentId,
@@ -189,13 +224,17 @@ export const createDevRoutes = (database: Database = db) =>
                 firstName,
                 lastName,
                 nickname: body.nickname,
-                role: body.role ?? "student"
+                role
               }
             })
             .returning();
 
-          const created_registrations: { project: string; groupId: string | null }[] = [];
-          for (const reg of body.registrations ?? []) {
+          const created_registrations: {
+            project: string;
+            staffRole: string | null;
+            groupId: string | null;
+          }[] = [];
+          for (const reg of regs) {
             const [registration] = await tx
               .insert(registrations)
               .values({
@@ -222,7 +261,11 @@ export const createDevRoutes = (database: Database = db) =>
                 .set({ groupId })
                 .where(eq(registrations.id, registration.id));
             }
-            created_registrations.push({ project: reg.project, groupId });
+            created_registrations.push({
+              project: reg.project,
+              staffRole: reg.staffRole ?? null,
+              groupId
+            });
           }
 
           return { student, created_registrations };
@@ -245,6 +288,9 @@ export const createDevRoutes = (database: Database = db) =>
           description:
             "Creates a test persona: better-auth user (Google SSO bypassed) + students row, " +
             "optionally registered for firstdate/rpkm (rpkm gets a solo group like the real flow). " +
+            "`staffRoles` expands into registrations — each role lands on the project whose " +
+            "check-in gate reads it (firstdate → firstdate; rpkm/walkrally/freshmennight → rpkm), " +
+            "so up to one role per project — and implies role=staff. " +
             "Idempotent — re-posting the same studentId updates the profile."
         },
         body: t.Object({
@@ -253,11 +299,20 @@ export const createDevRoutes = (database: Database = db) =>
           lastName: t.Optional(t.String()),
           nickname: t.Optional(t.String()),
           role: t.Optional(t.Union([t.Literal("student"), t.Literal("staff")])),
+          staffRoles: t.Optional(
+            t.Array(tStaffRole, {
+              description:
+                "Staff roles to hold — expands into one registration per project " +
+                "(firstdate role → firstdate registration; rpkm/walkrally/freshmennight → rpkm). " +
+                "Sets role=staff unless `role` says otherwise. At most one role per project " +
+                "(the DB stores a single staff_role per registration)."
+            })
+          ),
           registrations: t.Optional(
             t.Array(
               t.Object({
                 project: tProject,
-                staffRole: t.Optional(tStaffRole),
+                staffRoles: t.Optional(t.Array(tStaffRole)),
                 withGroup: t.Optional(
                   t.Boolean({ description: "rpkm only: create the solo group (default true)" })
                 )
@@ -273,10 +328,15 @@ export const createDevRoutes = (database: Database = db) =>
               authUserId: t.String(),
               authUserCreated: t.Boolean(),
               registrations: t.Array(
-                t.Object({ project: t.String(), groupId: t.Nullable(t.String()) })
+                t.Object({
+                  project: t.String(),
+                  staffRole: t.Nullable(t.String()),
+                  groupId: t.Nullable(t.String())
+                })
               )
             })
-          )
+          ),
+          ...tAppErrors("BAD_REQUEST")
         }
       }
     )
