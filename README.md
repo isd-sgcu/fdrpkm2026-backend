@@ -72,6 +72,7 @@ All docs live in [`docs/`](docs/):
 | [`docs/mvc.md`](docs/mvc.md)                       | Layering convention (controller / service / model) on top of Elysia                 |
 | [`docs/drizzle-elysia.md`](docs/drizzle-elysia.md) | How Drizzle and Elysia are wired together in this repo                              |
 | [`docs/upload-guide.md`](docs/upload-guide.md)     | Adding a file upload feature using the existing S3 storage plumbing                 |
+| [`docs/dev-endpoints.md`](docs/dev-endpoints.md)   | Dev-only `/v1/dev/*` endpoints — test personas, impersonation, DB seeding           |
 
 ### Auth (`docs/auth/`)
 
