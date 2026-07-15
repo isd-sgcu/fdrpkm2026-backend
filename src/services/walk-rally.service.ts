@@ -7,7 +7,7 @@ import {
   walkRallyAttendances,
   walkRallyRegistrations
 } from "@src/db/schema";
-import { AppError, type AppErrorCode } from "@src/utils";
+import { AppError } from "@src/utils";
 import { isEventActive, isEventPassed } from "@src/utils/flags";
 import { WALK_RALLY } from "@src/constants";
 import { assertStaffForProject } from "@src/services/checkin.helper";
@@ -15,26 +15,16 @@ import { assertStaffForProject } from "@src/services/checkin.helper";
 // Constant
 export type WalkRallyDeps = { db?: Database };
 
-/** Thrown on expected business failures; controller maps `code` to an HTTP status. */
-class WalkRallyServiceError extends Error {
-  constructor(
-    public code: AppErrorCode,
-    public context?: Record<string, unknown>
-  ) {
-    super(code);
-  }
-}
-
 // Helper function
 /**
  * @desc Resolves the `students` row for a CUNET id.
  * @param studentId CUNET id, as derived by authMiddleware from the session email
- * @throws {WalkRallyServiceError} NOT_FOUND if no `students` row matches
+ * @throws {AppError} NOT_FOUND if no `students` row matches
  */
 const resolveCurrentStudent = async (studentId: string, deps: WalkRallyDeps = {}) => {
   const database = deps.db ?? defaultDb;
   const [student] = await database.select().from(students).where(eq(students.studentId, studentId));
-  if (!student) throw new WalkRallyServiceError("NOT_FOUND");
+  if (!student) throw new AppError("NOT_FOUND");
   return student;
 };
 
@@ -80,7 +70,7 @@ const assertNoRoundConflict = async (
     const slot = WALK_RALLY.rounds[scheduleFor(r.activityCode)].find((s) => s.round === r.round)!;
     return overlaps(targetStart, targetEnd, toMinutes(slot.start), toMinutes(slot.end));
   });
-  if (conflict) throw new WalkRallyServiceError("ROUND_CONFLICT");
+  if (conflict) throw new AppError("ROUND_CONFLICT");
 };
 
 /**
@@ -131,7 +121,7 @@ const deleteRegistration = async (database: Executor, studentId: string, activit
  * ---
  * @param studentId CUNET id (from authMiddleware)
  * @param activityCode `walk_rally_activities.code`
- * @throws {WalkRallyServiceError} NOT_FOUND if the student can't be resolved, INVALID_ACTIVITY
+ * @throws {AppError} NOT_FOUND if the student can't be resolved, INVALID_ACTIVITY
  */
 type RoundInfo = {
   round: number;
@@ -153,7 +143,7 @@ const getActivityRounds = async (
     .select()
     .from(walkRallyActivities)
     .where(eq(walkRallyActivities.code, activityCode));
-  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+  if (!activity) throw new AppError("INVALID_ACTIVITY");
 
   // Fetch every registration this student has across all activities
   const myRegistrations = await database
@@ -221,7 +211,7 @@ const getActivityRounds = async (
  * Registrations are ordered by upcoming activity — soonest start time first.
  * ---
  * @param studentId CUNET id (from authMiddleware)
- * @throws {WalkRallyServiceError} NOT_FOUND if the student can't be resolved
+ * @throws {AppError} NOT_FOUND if the student can't be resolved
  */
 type MyRegistration = {
   code: string;
@@ -285,7 +275,7 @@ const getMe = async (
  * ---
  * @param studentId CUNET id (from authMiddleware)
  * @param input `code` (walk_rally_activities.code) and `round` (1-6)
- * @throws {WalkRallyServiceError} REGISTRATION_CLOSED if outside the
+ * @throws {AppError} REGISTRATION_CLOSED if outside the
  *   regOpen/regClose window, NOT_FOUND if the student can't be resolved,
  *   INVALID_ACTIVITY, ROUND_CONFLICT, ACTIVITY_ALREADY_REGISTERED
  */
@@ -296,8 +286,7 @@ const registerForActivity = async (
   input: RegisterInput,
   deps: WalkRallyDeps = {}
 ): Promise<{ code: string; round: number }> => {
-  if (!isEventActive("rpkm_walkrally_registration"))
-    throw new WalkRallyServiceError("REGISTRATION_CLOSED");
+  if (!isEventActive("rpkm_walkrally_registration")) throw new AppError("REGISTRATION_CLOSED");
 
   const database = deps.db ?? defaultDb;
   const student = await resolveCurrentStudent(studentId, deps);
@@ -306,7 +295,7 @@ const registerForActivity = async (
     .select()
     .from(walkRallyActivities)
     .where(eq(walkRallyActivities.code, input.code));
-  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+  if (!activity) throw new AppError("INVALID_ACTIVITY");
 
   const targetSlot = WALK_RALLY.rounds[scheduleFor(activity.code)].find(
     (s) => s.round === input.round
@@ -320,7 +309,7 @@ const registerForActivity = async (
     await assertNoRoundConflict(tx, student.id, input.round, targetStart, targetEnd);
 
     const inserted = await insertRegistration(tx, student.id, activity.id, input.round);
-    if (!inserted) throw new WalkRallyServiceError("ACTIVITY_ALREADY_REGISTERED");
+    if (!inserted) throw new AppError("ACTIVITY_ALREADY_REGISTERED");
 
     return { code: activity.code, round: inserted.round };
   });
@@ -333,7 +322,7 @@ const registerForActivity = async (
  * ---
  * @param studentId CUNET id (from authMiddleware)
  * @param activityCode `walk_rally_activities.code`
- * @throws {WalkRallyServiceError} REGISTRATION_CLOSED if past regClose,
+ * @throws {AppError} REGISTRATION_CLOSED if past regClose,
  *   NOT_FOUND if the student can't be resolved or holds no registration for
  *   this activity, INVALID_ACTIVITY
  */
@@ -342,8 +331,7 @@ const unregisterFromActivity = async (
   activityCode: string,
   deps: WalkRallyDeps = {}
 ): Promise<{ code: string }> => {
-  if (isEventPassed("rpkm_walkrally_registration"))
-    throw new WalkRallyServiceError("REGISTRATION_CLOSED");
+  if (isEventPassed("rpkm_walkrally_registration")) throw new AppError("REGISTRATION_CLOSED");
 
   const database = deps.db ?? defaultDb;
   const student = await resolveCurrentStudent(studentId, deps);
@@ -352,10 +340,10 @@ const unregisterFromActivity = async (
     .select()
     .from(walkRallyActivities)
     .where(eq(walkRallyActivities.code, activityCode));
-  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+  if (!activity) throw new AppError("INVALID_ACTIVITY");
 
   const deleted = await deleteRegistration(database, student.id, activity.id);
-  if (!deleted) throw new WalkRallyServiceError("NOT_FOUND");
+  if (!deleted) throw new AppError("NOT_FOUND");
 
   return { code: activity.code };
 };
@@ -369,7 +357,7 @@ const unregisterFromActivity = async (
  * @param studentId CUNET id (from authMiddleware)
  * @param activityCode `walk_rally_activities.code`
  * @param round requested round (1-6)
- * @throws {WalkRallyServiceError} REGISTRATION_CLOSED if outside the
+ * @throws {AppError} REGISTRATION_CLOSED if outside the
  *   regOpen/regClose window, NOT_FOUND if the student can't be resolved or
  *   holds no registration for this activity, INVALID_ACTIVITY, ROUND_CONFLICT
  */
@@ -379,8 +367,7 @@ const changeRound = async (
   round: number,
   deps: WalkRallyDeps = {}
 ): Promise<{ code: string; round: number }> => {
-  if (!isEventActive("rpkm_walkrally_registration"))
-    throw new WalkRallyServiceError("REGISTRATION_CLOSED");
+  if (!isEventActive("rpkm_walkrally_registration")) throw new AppError("REGISTRATION_CLOSED");
 
   const database = deps.db ?? defaultDb;
   const student = await resolveCurrentStudent(studentId, deps);
@@ -389,7 +376,7 @@ const changeRound = async (
     .select()
     .from(walkRallyActivities)
     .where(eq(walkRallyActivities.code, activityCode));
-  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+  if (!activity) throw new AppError("INVALID_ACTIVITY");
 
   const targetSlot = WALK_RALLY.rounds[scheduleFor(activity.code)].find((s) => s.round === round)!;
   const targetStart = toMinutes(targetSlot.start);
@@ -408,7 +395,7 @@ const changeRound = async (
           eq(walkRallyRegistrations.activityId, activity.id)
         )
       );
-    if (!own) throw new WalkRallyServiceError("NOT_FOUND");
+    if (!own) throw new AppError("NOT_FOUND");
 
     // Check if the requested round is the same as the current round.
     if (own.round === round) return { code: activity.code, round };
@@ -430,7 +417,7 @@ const changeRound = async (
  * ---
  * @param staffCunetId CUNET id of the scanning staff member, from the session
  * @param input target student's CUNET id and the activity's code
- * @throws {WalkRallyServiceError} FORBIDDEN_NOT_STAFF (role != "staff", or
+ * @throws {AppError} FORBIDDEN_NOT_STAFF (role != "staff", or
  *   their rpkm registration's staffRole != "walkrally"), STUDENT_NOT_FOUND,
  *   INVALID_ACTIVITY, ALREADY_CHECKED_IN (context: original scannedAt/scannedBy),
  *   POINTS_CAP_REACHED (>= 6 existing attendance rows)
@@ -447,25 +434,22 @@ const checkAttendance = async (
 ): Promise<{ studentId: string; activityId: string; scannedAt: Date; scannedBy: string }> => {
   const database = deps.db ?? defaultDb;
 
-  let staff;
-  try {
-    staff = await assertStaffForProject({ staffCunetId, project: "walkrally" }, { db: database });
-  } catch (err) {
-    if (err instanceof AppError) throw new WalkRallyServiceError(err.code, err.context);
-    throw err;
-  }
+  const staff = await assertStaffForProject(
+    { staffCunetId, project: "walkrally" },
+    { db: database }
+  );
 
   const [student] = await database
     .select()
     .from(students)
     .where(eq(students.studentId, input.studentId));
-  if (!student) throw new WalkRallyServiceError("STUDENT_NOT_FOUND");
+  if (!student) throw new AppError("STUDENT_NOT_FOUND");
 
   const [activity] = await database
     .select()
     .from(walkRallyActivities)
     .where(eq(walkRallyActivities.code, input.code));
-  if (!activity) throw new WalkRallyServiceError("INVALID_ACTIVITY");
+  if (!activity) throw new AppError("INVALID_ACTIVITY");
 
   return database.transaction(async (tx) => {
     await tx.select().from(students).where(eq(students.id, student.id)).for("update");
@@ -482,7 +466,7 @@ const checkAttendance = async (
         )
       );
     if (existing) {
-      throw new WalkRallyServiceError("ALREADY_CHECKED_IN", {
+      throw new AppError("ALREADY_CHECKED_IN", {
         scannedAt: existing.scannedAt,
         scannedBy: existing.scannedBy
       });
@@ -492,7 +476,7 @@ const checkAttendance = async (
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(walkRallyAttendances)
       .where(eq(walkRallyAttendances.studentId, student.id));
-    if (count >= 6) throw new WalkRallyServiceError("POINTS_CAP_REACHED");
+    if (count >= 6) throw new AppError("POINTS_CAP_REACHED");
 
     // Determine whether the student was preregistered for this activity or walk-in (onsite).
     const [registered] = await tx
@@ -525,7 +509,7 @@ const checkAttendance = async (
             eq(walkRallyAttendances.activityId, activity.id)
           )
         );
-      throw new WalkRallyServiceError("ALREADY_CHECKED_IN", {
+      throw new AppError("ALREADY_CHECKED_IN", {
         scannedAt: raced.scannedAt,
         scannedBy: raced.scannedBy
       });
@@ -542,7 +526,6 @@ const checkAttendance = async (
 
 // Namespace object — routes call `WalkRallyService.<fn>(...)` instead of
 export const WalkRallyService = {
-  WalkRallyServiceError,
   getActivityRounds,
   getMe,
   registerForActivity,
