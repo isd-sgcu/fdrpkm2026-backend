@@ -191,7 +191,7 @@ jobs:
             ${{ steps.image.outputs.sha }}
             ${{ steps.image.outputs.latest }}
           build-args: |
-            NODE_ENV=development
+            NODE_ENV=production
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
