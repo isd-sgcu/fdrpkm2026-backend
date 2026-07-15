@@ -222,7 +222,8 @@ describe("getMe (FirstDate) - debloated", () => {
       lastName: "Jaidee",
       faculty: null,
       role: "student",
-      registered: true
+      registered: true,
+      staffRole: null
     });
   });
 
@@ -235,7 +236,8 @@ describe("getMe (FirstDate) - debloated", () => {
       lastName: "Jaidee",
       faculty: null,
       role: "student",
-      registered: false
+      registered: false,
+      staffRole: null
     });
   });
 

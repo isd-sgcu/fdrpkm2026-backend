@@ -349,7 +349,8 @@ describe("getMe (RPKM) - debloated", () => {
       lastName: "Jaidee",
       faculty: null,
       role: "student",
-      registered: true
+      registered: true,
+      staffRole: null
     });
   });
 
@@ -362,8 +363,31 @@ describe("getMe (RPKM) - debloated", () => {
       lastName: "Jaidee",
       faculty: null,
       role: "student",
-      registered: false
+      registered: false,
+      staffRole: null
     });
+  });
+
+  it("surfaces staffRole when the rpkm registration is a staff one", async () => {
+    const [student] = await db
+      .insert(schema.students)
+      .values({
+        studentId: "6912345678",
+        email: "6912345678@student.chula.ac.th",
+        firstName: "Somchai",
+        lastName: "Jaidee",
+        role: "staff"
+      })
+      .returning();
+    await db.insert(schema.registrations).values({
+      studentId: student.id,
+      project: "rpkm",
+      pdpaAcceptedAt: new Date(),
+      staffRole: "walkrally"
+    });
+
+    const me = await getMe(authUser(), injected());
+    expect(me.staffRole).toBe("walkrally");
   });
 
   it("throws NOT_FRESHMEN for non-freshman when student record is absent", async () => {

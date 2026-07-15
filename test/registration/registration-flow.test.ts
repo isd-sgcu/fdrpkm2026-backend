@@ -293,7 +293,8 @@ describe("Production Flow Integration Tests", () => {
       lastName: "One",
       faculty: null,
       role: "student",
-      registered: false
+      registered: false,
+      staffRole: null
     });
 
     // 2. Register FD
@@ -308,7 +309,8 @@ describe("Production Flow Integration Tests", () => {
       lastName: "One",
       faculty: null,
       role: "student",
-      registered: true
+      registered: true,
+      staffRole: null
     });
   });
 });

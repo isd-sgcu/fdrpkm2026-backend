@@ -151,6 +151,7 @@ export type MeResult = {
   faculty: string | null;
   role: string;
   registered: boolean;
+  staffRole: string | null;
 };
 
 /** Injectable dependencies — routes use the defaults; tests pass a migrated
@@ -376,7 +377,8 @@ export const getRegistrationMe = async (
       lastName,
       faculty: null,
       role: "student",
-      registered: false
+      registered: false,
+      staffRole: null
     };
   }
 
@@ -393,7 +395,8 @@ export const getRegistrationMe = async (
     lastName: student.lastName,
     faculty: student.faculty,
     role: student.role,
-    registered: !!registration
+    registered: !!registration,
+    staffRole: registration?.staffRole ?? null
   };
 };
 

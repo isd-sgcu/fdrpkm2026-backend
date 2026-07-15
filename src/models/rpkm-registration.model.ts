@@ -57,7 +57,8 @@ const meResult = t.Object({
   lastName: t.String(),
   faculty: t.Nullable(t.String()),
   role: t.String(),
-  registered: t.Boolean()
+  registered: t.Boolean(),
+  staffRole: t.Nullable(t.String())
 });
 
 export const RpkmRegistrationModel = new Elysia().model({
