@@ -55,7 +55,10 @@ export const auth = betterAuth({
   ],
   plugins: [
     bearer(),
-    openAPI()
+    // Better Auth's OpenAPI plugin exposes `/reference` and
+    // `/open-api/generate-schema` under the auth base path. Keep those
+    // development/staging-only, matching the Elysia Scalar docs in app.ts.
+    ...(env.NODE_ENV === "production" ? [] : [openAPI()])
     // i18n({
     //   translations: {},
     //   defaultLocale: "en"
