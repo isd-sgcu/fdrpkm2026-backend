@@ -1,9 +1,10 @@
 import { Elysia } from "elysia";
 
+import { isAllowedOrigin } from "@src/config";
 import { AvatarModel } from "@src/models/avatar.model";
 import { authMiddleware } from "@src/routes/auth";
 import { AvatarService } from "@src/services/avatar.service";
-import { authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
+import { AppError, authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
 
 /**
  * Shared (firstdate + rpkm) avatar upload for the authenticated user. Thin
@@ -19,6 +20,16 @@ export const avatarRoutes = new Elysia({ prefix: "/me" })
     async ({ user, body }) => successResponse(AvatarService.updateAvatar(user.id, body.file)),
     {
       auth: true,
+      // CSRF defense: reject credentialed cross-site POSTs. Browsers always send
+      // an Origin on cross-origin requests; same-origin and non-browser (bearer)
+      // clients that omit it are unaffected. better-auth's own origin check does
+      // not cover this custom route, so it's enforced here explicitly.
+      beforeHandle({ request }) {
+        const origin = request.headers.get("origin");
+        if (origin && !isAllowedOrigin(origin)) {
+          throw new AppError("FORBIDDEN");
+        }
+      },
       detail: {
         security: authSecurity,
         tags: ["Users"],
@@ -30,7 +41,13 @@ export const avatarRoutes = new Elysia({ prefix: "/me" })
       body: "Avatar.UploadBody",
       response: {
         200: tSuccessResponse(AvatarModel.models.uploadResult.Schema()),
-        ...tAppErrors("VALIDATION", "UNAUTHORIZED", "BAD_REQUEST", "INTERNAL_SERVER_ERROR")
+        ...tAppErrors(
+          "VALIDATION",
+          "UNAUTHORIZED",
+          "FORBIDDEN",
+          "BAD_REQUEST",
+          "INTERNAL_SERVER_ERROR"
+        )
       }
     }
   );

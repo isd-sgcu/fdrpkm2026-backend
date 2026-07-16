@@ -13,11 +13,15 @@ let client: PGlite;
 let db: PgliteDatabase<typeof schema>;
 
 const uploads: { key: string; file: File }[] = [];
+const deletes: string[] = [];
 const storage = {
   uploadObject: async (key: string, file: File) => {
     uploads.push({ key, file });
   },
-  getObjectUrl: async (key: string) => `https://assets.test/${key}`
+  getObjectUrl: async (key: string) => `https://assets.test/${key}`,
+  deleteObject: async (key: string) => {
+    deletes.push(key);
+  }
 };
 const injected = () => ({ db: db as unknown as Database, storage });
 
@@ -82,5 +86,57 @@ describe("AvatarService.updateAvatar", () => {
 
     const [row] = await db.select().from(schema.user).where(eq(schema.user.id, USER_ID));
     expect(row.image).toBe(url);
+  });
+
+  it("does not upscale an image smaller than the target", async () => {
+    const file = new File([makeBmp(100, 100)], "small.bmp", { type: "image/png" });
+
+    const { url } = await AvatarService.updateAvatar(USER_ID, file, injected());
+    const stored = uploads[uploads.length - 1];
+
+    const meta = await new Bun.Image(await stored.file.bytes()).metadata();
+    expect(meta.width).toBe(100);
+    expect(meta.height).toBe(100);
+    expect(url).toBe(`https://assets.test/${stored.key}`);
+  });
+
+  it("does not update user.image when the upload fails", async () => {
+    const [before] = await db.select().from(schema.user).where(eq(schema.user.id, USER_ID));
+    const failing = {
+      db: db as unknown as Database,
+      storage: {
+        ...storage,
+        uploadObject: async () => {
+          throw new Error("storage down");
+        }
+      }
+    };
+    const file = new File([makeBmp(300, 300)], "x.bmp", { type: "image/png" });
+
+    await expect(AvatarService.updateAvatar(USER_ID, file, failing)).rejects.toThrow(
+      "storage down"
+    );
+
+    const [after] = await db.select().from(schema.user).where(eq(schema.user.id, USER_ID));
+    expect(after.image).toBe(before.image);
+  });
+
+  it("deletes the previous avatar object when replacing it", async () => {
+    const first = await AvatarService.updateAvatar(
+      USER_ID,
+      new File([makeBmp(300, 300)], "a.bmp", { type: "image/png" }),
+      injected()
+    );
+    const firstKey = first.url.replace("https://assets.test/", "");
+    const deletesBefore = deletes.length;
+
+    await AvatarService.updateAvatar(
+      USER_ID,
+      new File([makeBmp(300, 300)], "b.bmp", { type: "image/png" }),
+      injected()
+    );
+
+    expect(deletes.length).toBe(deletesBefore + 1);
+    expect(deletes[deletes.length - 1]).toBe(firstKey);
   });
 });

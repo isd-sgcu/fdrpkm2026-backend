@@ -3,7 +3,7 @@ import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 
 import { requestLogger, traceIdFrom } from "@src/plugins/request-logger";
-import { env } from "@src/config";
+import { corsOrigins, env } from "@src/config";
 import { apiRoutes } from "@src/routes";
 import { authMiddleware } from "@src/routes/auth";
 import { AppError, errorResponse, OpenAPI } from "@src/utils";
@@ -18,8 +18,14 @@ const authDocs =
         paths: await OpenAPI.getPaths()
       };
 
+// Cap the whole request body at 20MB. The largest legitimate body is the 15MB
+// avatar upload plus multipart overhead; without this, Bun's 128MB default lets
+// an attacker force the server to buffer ~128MB per request before any
+// validation runs. Bodies over the cap are rejected at the transport layer.
+const MAX_REQUEST_BODY_BYTES = 20 * 1024 * 1024;
+
 export const createApp = () =>
-  new Elysia()
+  new Elysia({ serve: { maxRequestBodySize: MAX_REQUEST_BODY_BYTES } })
     .onError(({ error, code, status, request }) => {
       // Domain errors thrown by services/guards. Checked via instanceof, not
       // the `code` switch: Elysia derives `code` from the thrown error's own
@@ -68,7 +74,9 @@ export const createApp = () =>
     // Registered AFTER onError so the access log's onAfterResponse reads the
     // final status (including statuses the error handler sets above).
     .use(requestLogger)
-    .use(cors())
+    // Explicit allowlist instead of the reflect-any-origin default — only the
+    // known frontends may make credentialed cross-origin calls.
+    .use(cors({ origin: corsOrigins, credentials: true }))
     // OpenAPI docs (Scalar UI at /openapi) — dev/staging only, not in production.
     .use(
       env.NODE_ENV === "production"
