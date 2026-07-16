@@ -52,7 +52,8 @@ ALTER TABLE "entries" DROP CONSTRAINT "fd_entries_student_id_students_id_fk";
 --> statement-breakpoint
 ALTER TABLE "entries" DROP CONSTRAINT "fd_entries_scanned_by_students_id_fk";
 --> statement-breakpoint
-ALTER TABLE "entries" ADD COLUMN "project" "project" NOT NULL;--> statement-breakpoint
+ALTER TABLE "entries" ADD COLUMN "project" "project" DEFAULT 'firstdate' NOT NULL;--> statement-breakpoint
+ALTER TABLE "entries" ALTER COLUMN "project" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_userId_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
