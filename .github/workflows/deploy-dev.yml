@@ -84,8 +84,6 @@ jobs:
         env:
           GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
         run: |
           required=(
@@ -97,8 +95,6 @@ jobs:
             CLOUD_SQL_CONNECTION_NAME
             GCP_WORKLOAD_IDENTITY_PROVIDER
             GCP_SERVICE_ACCOUNT
-            DATABASE_URL
-            BETTER_AUTH_SECRET
             BETTER_AUTH_URL
           )
 
@@ -108,16 +104,6 @@ jobs:
               exit 1
             fi
           done
-
-          if [[ "${DATABASE_URL}" == *"@127.0.0.1"* ]] || [[ "${DATABASE_URL}" == *"@localhost"* ]]; then
-            echo "::error::DATABASE_URL must use the Cloud SQL Unix socket in Cloud Run, not the migration proxy address."
-            exit 1
-          fi
-
-          if [[ "${DATABASE_URL}" != *"host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}"* ]]; then
-            echo "::error::DATABASE_URL must contain host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}."
-            exit 1
-          fi
 
           if [ "${ALLOW_DEV_DEPLOY_HEALTH_FAILURE}" != "true" ] && \
              [ "${ALLOW_DEV_DEPLOY_HEALTH_FAILURE}" != "false" ]; then
@@ -167,9 +153,8 @@ jobs:
             --project "${GCP_PROJECT_ID}" \
             --region "${GCP_REGION}" \
             --platform managed \
-            --format="value(status.traffic[].revisionName,status.traffic[].percent)" \
-            | awk 'NF == 2 { printf "%s=%s,", $1, $2 }' \
-            | sed 's/,$//')"
+            --format=json \
+            | jq -r '[.status.traffic[] | select(.percent != null and .revisionName != null) | "\(.revisionName)=\(.percent)"] | unique | join(",")')"
 
           if [ -z "$TRAFFIC" ]; then
             echo "::warning::No existing Cloud Run traffic found. Automatic rollback will be skipped if promotion fails."
@@ -195,7 +180,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Create protected Cloud Run environment file
+      - name: Deploy SHA image to Cloud Run
         env:
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
@@ -203,38 +188,12 @@ jobs:
           S3_REGION: ${{ vars.S3_REGION || 'auto' }}
           S3_BUCKET: ${{ vars.S3_BUCKET }}
           ASSET_BASE_URL: ${{ vars.ASSET_BASE_URL }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-        run: |
-          # JSON is valid YAML and lets jq safely escape arbitrary secret values.
-          CLOUD_RUN_ENV_FILE="${RUNNER_TEMP}/cloud-run-dev-env-${GITHUB_RUN_ID}.yaml"
-
-          jq -n '
-            {
-              NODE_ENV: "development",
-              BETTER_AUTH_URL: env.BETTER_AUTH_URL,
-              GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
-              S3_ENDPOINT: env.S3_ENDPOINT,
-              S3_REGION: env.S3_REGION,
-              S3_BUCKET: env.S3_BUCKET,
-              ASSET_BASE_URL: env.ASSET_BASE_URL,
-              DATABASE_URL: env.DATABASE_URL,
-              BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
-              GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET,
-              S3_ACCESS_KEY_ID: env.S3_ACCESS_KEY_ID,
-              S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY
-            }' > "${CLOUD_RUN_ENV_FILE}"
-
-          chmod 600 "${CLOUD_RUN_ENV_FILE}"
-          echo "CLOUD_RUN_ENV_FILE=${CLOUD_RUN_ENV_FILE}" >> "$GITHUB_ENV"
-
-      - name: Deploy SHA image to Cloud Run
         run: |
           run_deploy() {
             local use_no_traffic="$1"
+            # --update-env-vars merges only these non-secret values, preserving
+            # secret references configured manually in Cloud Run.
+            local runtime_env_vars="^@^NODE_ENV=development@BETTER_AUTH_URL=${BETTER_AUTH_URL}@GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}@S3_ENDPOINT=${S3_ENDPOINT}@S3_REGION=${S3_REGION}@S3_BUCKET=${S3_BUCKET}@ASSET_BASE_URL=${ASSET_BASE_URL}"
             local args=(
               gcloud run deploy "${CLOUD_RUN_SERVICE_DEV}"
               --project "${GCP_PROJECT_ID}"
@@ -252,7 +211,7 @@ jobs:
               --memory 256Mi
               --cpu 1
               --cpu-throttling
-              --env-vars-file "${CLOUD_RUN_ENV_FILE}"
+              --update-env-vars "${runtime_env_vars}"
               --quiet
               --timeout 300s
             )
@@ -274,13 +233,6 @@ jobs:
             else
               exit 1
             fi
-          fi
-
-      - name: Remove protected Cloud Run environment file
-        if: always()
-        run: |
-          if [ -n "${CLOUD_RUN_ENV_FILE:-}" ]; then
-            rm -f "${CLOUD_RUN_ENV_FILE}"
           fi
 
       # The candidate tag gives us a revision-specific URL for pre-traffic health checks.

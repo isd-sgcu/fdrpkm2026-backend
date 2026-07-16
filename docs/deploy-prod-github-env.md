@@ -43,11 +43,6 @@ branches to `main`.
 | -------------------------------- | ---------------------------------------------- |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | Full Workload Identity provider resource name. |
 | `GCP_SERVICE_ACCOUNT`            | GitHub deployment service account email.       |
-| `DATABASE_URL`                   | Production PostgreSQL URL.                     |
-| `BETTER_AUTH_SECRET`             | Unique production Better Auth secret.          |
-| `GOOGLE_CLIENT_SECRET`           | Production Google OAuth client secret.         |
-| `S3_ACCESS_KEY_ID`               | Production S3-compatible access key.           |
-| `S3_SECRET_ACCESS_KEY`           | Production S3-compatible secret key.           |
 
 When using the Cloud Run Cloud SQL mount, a PostgreSQL URL can use the Unix socket:
 
@@ -63,8 +58,9 @@ Use separate service accounts:
 
 - GitHub deployment service account: Artifact Registry Writer, Cloud Run Admin,
   and Service Account User on the runtime account.
-- Cloud Run runtime service account: Cloud SQL Client and only the additional
-  resource permissions the application needs.
+- Cloud Run runtime service account: Cloud SQL Client,
+  `roles/secretmanager.secretAccessor` on each mapped runtime secret, and only
+  the additional resource permissions the application needs.
 
 The GitHub identity must have Workload Identity User on the deployment service
 account. Do not create or upload a service-account JSON key.
@@ -123,3 +119,10 @@ gcloud run deploy CLOUD_RUN_SERVICE_PROD \
   --region GCP_REGION \
   --image GCP_REGION-docker.pkg.dev/GCP_PROJECT_ID/GAR_REPOSITORY/fdrpkm2026-backend:COMMIT_SHA
 ```
+
+## Runtime secret setup
+
+Configure runtime secrets manually in Cloud Run. The workflow uses
+`--update-env-vars` only for non-secret configuration, so it preserves the existing
+Cloud Run secret references. The `DATABASE_URL` value must use the Cloud SQL Unix
+socket endpoint, not the migration proxy endpoint.

@@ -114,11 +114,6 @@ jobs:
         env:
           GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           S3_BUCKET: ${{ vars.S3_BUCKET }}
@@ -132,14 +127,9 @@ jobs:
             CLOUD_SQL_CONNECTION_NAME
             GCP_WORKLOAD_IDENTITY_PROVIDER
             GCP_SERVICE_ACCOUNT
-            DATABASE_URL
-            BETTER_AUTH_SECRET
             BETTER_AUTH_URL
             GOOGLE_CLIENT_ID
-            GOOGLE_CLIENT_SECRET
             S3_BUCKET
-            S3_ACCESS_KEY_ID
-            S3_SECRET_ACCESS_KEY
           )
 
           for name in "${required[@]}"; do
@@ -269,7 +259,7 @@ jobs:
           provenance: mode=max
           sbom: true
 
-      - name: Create protected Cloud Run environment file
+      - name: Deploy SHA image as production candidate
         env:
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
@@ -277,38 +267,12 @@ jobs:
           S3_REGION: ${{ vars.S3_REGION || 'auto' }}
           S3_BUCKET: ${{ vars.S3_BUCKET }}
           ASSET_BASE_URL: ${{ vars.ASSET_BASE_URL }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
-          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
-        run: |
-          # JSON is valid YAML and lets jq safely escape arbitrary secret values.
-          CLOUD_RUN_ENV_FILE="${RUNNER_TEMP}/cloud-run-prod-env-${GITHUB_RUN_ID}.yaml"
-
-          jq -n '
-            {
-              NODE_ENV: "production",
-              BETTER_AUTH_URL: env.BETTER_AUTH_URL,
-              GOOGLE_CLIENT_ID: env.GOOGLE_CLIENT_ID,
-              S3_ENDPOINT: env.S3_ENDPOINT,
-              S3_REGION: env.S3_REGION,
-              S3_BUCKET: env.S3_BUCKET,
-              ASSET_BASE_URL: env.ASSET_BASE_URL,
-              DATABASE_URL: env.DATABASE_URL,
-              BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
-              GOOGLE_CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET,
-              S3_ACCESS_KEY_ID: env.S3_ACCESS_KEY_ID,
-              S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY
-            }' > "${CLOUD_RUN_ENV_FILE}"
-
-          chmod 600 "${CLOUD_RUN_ENV_FILE}"
-          echo "CLOUD_RUN_ENV_FILE=${CLOUD_RUN_ENV_FILE}" >> "$GITHUB_ENV"
-
-      - name: Deploy SHA image as production candidate
         run: |
           run_deploy() {
             local use_no_traffic="$1"
+            # --update-env-vars merges only these non-secret values, preserving
+            # secret references configured manually in Cloud Run.
+            local runtime_env_vars="^@^NODE_ENV=production@BETTER_AUTH_URL=${BETTER_AUTH_URL}@GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}@S3_ENDPOINT=${S3_ENDPOINT}@S3_REGION=${S3_REGION}@S3_BUCKET=${S3_BUCKET}@ASSET_BASE_URL=${ASSET_BASE_URL}"
             local args=(
               gcloud run deploy "${CLOUD_RUN_SERVICE_PROD}"
               --project "${GCP_PROJECT_ID}"
@@ -330,7 +294,7 @@ jobs:
               --cpu-boost
               --startup-probe "httpGet.path=/v1/health,httpGet.port=${CONTAINER_PORT},initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=5,failureThreshold=12"
               --liveness-probe "httpGet.path=/v1/health,httpGet.port=${CONTAINER_PORT},initialDelaySeconds=10,timeoutSeconds=3,periodSeconds=30,failureThreshold=3"
-              --env-vars-file "${CLOUD_RUN_ENV_FILE}"
+              --update-env-vars "${runtime_env_vars}"
               --timeout 300s
               --quiet
             )
@@ -546,10 +510,3 @@ jobs:
             echo "- Post-promotion cleanup: ${{ steps.promoted-cleanup.outcome }}"
             echo "- Stable tagging: ${{ steps.stable.outcome }}"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Remove temporary runtime environment file
-        if: always()
-        run: |
-          if [ -n "${CLOUD_RUN_ENV_FILE:-}" ]; then
-            rm -f "${CLOUD_RUN_ENV_FILE}"
-          fi

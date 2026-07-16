@@ -14,8 +14,9 @@ GitHub repository -> Settings -> Environments
 
 Because both database targets use this environment, its protection rules apply to
 both dev and prod migrations. Keep the manual `MIGRATE_DEV` / `MIGRATE_PROD`
-confirmation enabled. If production later requires separate reviewers, restore
-separate `migration-dev` and `migration-prod` environments.
+confirmation enabled. Production migrations may only be dispatched from the
+`main` branch. If production later requires separate reviewers, restore separate
+`migration-dev` and `migration-prod` environments.
 
 ## Environment Variables
 
@@ -37,6 +38,13 @@ separate `migration-dev` and `migration-prod` environments.
 
 The workflow selects exactly one database URL from the dispatch `target`. Both URLs
 use `127.0.0.1:5432` because the workflow connects through Cloud SQL Auth Proxy.
+
+## Migration execution
+
+The workflow runs `bun run db:migrate`, not the SQL files directly. Drizzle records
+applied migrations in `drizzle.__drizzle_migrations` and applies all pending journal
+migrations in one PostgreSQL transaction. Re-running the workflow therefore skips
+already applied migrations and a failure rolls back the whole pending batch.
 
 ## Backup Retention
 

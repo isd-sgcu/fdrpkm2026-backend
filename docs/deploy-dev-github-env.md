@@ -37,11 +37,6 @@ Add these under `Environment secrets`.
 | -------------------------------- | ---------------------------------------------- |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | Full Workload Identity provider resource name. |
 | `GCP_SERVICE_ACCOUNT`            | Deploy service account email.                  |
-| `DATABASE_URL`                   | Dev PostgreSQL Cloud SQL Unix-socket URL.      |
-| `BETTER_AUTH_SECRET`             | Strong random Better Auth secret.              |
-| `GOOGLE_CLIENT_SECRET`           | Google OAuth client secret.                    |
-| `S3_ACCESS_KEY_ID`               | S3-compatible access key ID.                   |
-| `S3_SECRET_ACCESS_KEY`           | S3-compatible secret access key.               |
 
 ## How The Workflow Uses These Values
 
@@ -59,7 +54,7 @@ GCP_REGION-docker.pkg.dev/GCP_PROJECT_ID/GAR_REPOSITORY/fdrpkm2026-backend:<tag>
 - Dev scaling/resources are fixed at min instances `0`, max instances `1`, memory `256Mi`, CPU `1`, and the Gen1 execution environment.
 - On the first deploy, Cloud Run creates the service with live traffic because `--no-traffic` is not supported when creating a new service.
 - On later deploys, the workflow deploys the candidate revision without traffic, health-checks it, then promotes it.
-- Runtime app config is injected using a protected temporary env file that is deleted immediately after deployment.
+- The workflow updates only non-secret runtime configuration with `--update-env-vars`. It preserves runtime secrets configured manually in Cloud Run.
 - The deployed service is health-checked at `CLOUD_RUN_HEALTH_PATH` with plain `curl`.
 
 ## Database Connection
@@ -98,7 +93,7 @@ The workflow defaults to `/v1/health/ready`. The container/Docker liveness check
 
 ## Required IAM
 
-- Runtime service account: `roles/cloudsql.client` on the project.
+- Runtime service account: `roles/cloudsql.client` on the project. If manually configured Cloud Run secrets reference Secret Manager, grant the runtime service account `roles/secretmanager.secretAccessor` on those secrets.
 - GitHub deployment service account: `roles/iam.serviceAccountUser` on the runtime service account.
 - Keep the deployment and runtime service accounts separate; do not attach the GitHub deployer to Cloud Run.
 
@@ -119,8 +114,21 @@ ALLOW_DEV_DEPLOY_HEALTH_FAILURE=true
 
 That variable does not suppress emails for earlier failures such as build, Docker push, authentication, or `gcloud run deploy`. Remove the variable or set it to `false` after the incident is fixed.
 
+## Manually configured runtime secrets
+
+Set `DATABASE_URL` in Cloud Run to use the Unix-socket URL, not the migration
+proxy URL:
+
+```txt
+postgresql://fdrpkm_app_runtime:URL_ENCODED_PASSWORD@/DATABASE_NAME?host=/cloudsql/PROJECT:REGION:INSTANCE
+```
+
+Configure `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_SECRET`, `S3_ACCESS_KEY_ID`, and
+`S3_SECRET_ACCESS_KEY` in Cloud Run as well. Use Cloud Run's **Secrets exposed as
+environment variables** controls when using Secret Manager.
+
 ## Notes
 
 - Do not commit `.env` files.
 - Do not add Google service account JSON keys to GitHub.
-- Runtime secrets are written only to a permission-restricted temporary runner file and are not printed.
+- Do not store Cloud Run runtime secret values in GitHub Environment secrets; GitHub retains only the OIDC authentication settings for deployment.
