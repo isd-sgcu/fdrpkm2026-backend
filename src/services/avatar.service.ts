@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
-import sharp from "sharp";
 
 import { db as defaultDb, type Database } from "@src/db";
 import { user } from "@src/db/schema";
@@ -19,9 +18,14 @@ export type AvatarDeps = {
 
 /**
  * Recompress the uploaded image (route-validated jpeg/png/webp, ≤15m) to a
- * 512×512 center-cropped webp, store it, and point `user.image` at it.
- * `.rotate()` applies EXIF orientation before sharp strips metadata (which
- * also drops GPS tags — deliberate).
+ * ≤512px webp via Bun.Image (zero-dep, needs bun ≥1.3.14), store it, and
+ * point `user.image` at it. EXIF orientation is auto-applied and re-encoding
+ * drops all metadata including GPS tags — deliberate.
+ *
+ * ponytail: fit "inside" preserves aspect ratio (Bun.Image has no "cover");
+ * every consumer renders with CSS object-cover, so the visual crop is
+ * identical. Switch to a manual center-crop if a hard-square contract is
+ * ever needed.
  */
 const updateAvatar = async (
   userId: string,
@@ -31,13 +35,12 @@ const updateAvatar = async (
   const database = deps.db ?? defaultDb;
   const storage = deps.storage ?? { uploadObject, getObjectUrl };
 
-  let processed: Buffer;
+  let processed: Uint8Array;
   try {
-    processed = await sharp(Buffer.from(await file.arrayBuffer()))
-      .rotate()
-      .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "cover", withoutEnlargement: true })
+    processed = await new Bun.Image(await file.bytes())
+      .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "inside", withoutEnlargement: true })
       .webp({ quality: WEBP_QUALITY })
-      .toBuffer();
+      .bytes();
   } catch {
     throw new AppError("BAD_REQUEST", { message: "File is not a decodable image." });
   }
@@ -45,10 +48,9 @@ const updateAvatar = async (
   // ponytail: uuid keys per upload-guide.md; replaced avatars orphan in the
   // bucket — add a delete-old-key step if storage cost ever matters.
   const key = `avatars/${randomUUID()}.webp`;
-  await storage.uploadObject(
-    key,
-    new File([new Uint8Array(processed)], key, { type: "image/webp" })
-  );
+  // .slice() copies into a plain ArrayBuffer-backed view — File's BlobPart
+  // type rejects the ArrayBufferLike-backed one .bytes() returns.
+  await storage.uploadObject(key, new File([processed.slice()], key, { type: "image/webp" }));
 
   const url = await storage.getObjectUrl(key);
   await database.update(user).set({ image: url }).where(eq(user.id, userId));
