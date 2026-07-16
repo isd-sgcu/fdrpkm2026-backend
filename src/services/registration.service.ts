@@ -16,7 +16,8 @@ import {
   type Group,
   type NewStudent,
   type NewTravelLeg,
-  type Student
+  type Student,
+  type TravelLeg
 } from "@src/db/schema";
 
 /**
@@ -43,7 +44,7 @@ export type Project = "firstdate" | "rpkm";
 /** Minimal slice of the Better Auth user this service needs. */
 export type AuthUser = { id: string; email: string; name: string };
 
-export type Vehicle = NewTravelLeg["vehicle"];
+export type Vehicle = TravelLeg["vehicle"];
 export type Prefix = Student["prefix"];
 
 export type TravelLegInput = {

@@ -71,6 +71,13 @@
       "when": 1784060312017,
       "tag": "0009_hot_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784220709165,
+      "tag": "0010_premium_blizzard",
+      "breakpoints": true
     }
   ]
 }
