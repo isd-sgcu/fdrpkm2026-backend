@@ -24,6 +24,12 @@ export const env = {
   HOST: process.env.HOST || DEFAULT_HOST,
   NODE_ENV: process.env.NODE_ENV || DEFAULT_NODE_ENV,
   LOG_LEVEL: process.env.LOG_LEVEL || DEFAULT_LOG_LEVEL,
+  // Optional. When set, structured logs include a Cloud Trace correlation id
+  // (logging.googleapis.com/trace) so a request's logs link to its trace in
+  // the GCP console. Cloud Run does NOT set this automatically — pass it as a
+  // deploy env var to enable the linkage; logs still carry a plain traceId
+  // without it.
+  GCP_PROJECT_ID: process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || "",
   DATABASE_URL: process.env.DATABASE_URL || DEFAULT_DATABASE_URL,
   DATABASE_FILE: process.env.DATABASE_FILE || DEFAULT_DATABASE_FILE,
   BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "",
