@@ -10,7 +10,7 @@ export const entries = t.pgTable(
   "entries",
   {
     ...id,
-    project: projectEnum("project").notNull(),
+    project: projectEnum("project").notNull().default("firstdate"),
     studentId: t
       .uuid("student_id")
       .notNull()

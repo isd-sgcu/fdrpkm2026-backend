@@ -61,7 +61,7 @@ export const walkRallyAttendances = t.pgTable(
       .notNull()
       .references(() => students.id, { onDelete: "restrict" }),
     scannedAt: t.timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
-    source: attendanceSourceEnum("source").notNull(),
+    source: attendanceSourceEnum("source").notNull().default("onsite"),
     ...timestamps
   },
   (table) => [
