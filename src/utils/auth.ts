@@ -30,7 +30,11 @@ export const auth = betterAuth({
     // Single shared API host (see README's "Two frontends, one backend,
     // one API host") — Better Auth checks the request's
     // `x-forwarded-host`/`Host` against this allowlist.
-    allowedHosts: ["*.rpkm2026.com", ...(env.NODE_ENV !== "production" ? ["localhost:*"] : [])],
+    allowedHosts: [
+      "*.rpkm2026.com",
+      "*.cufirstdate2026.com",
+      ...(env.NODE_ENV !== "production" ? ["localhost:*"] : [])
+    ],
     // Staging runs in development mode but still has an HTTPS public URL.
     protocol: authProtocol,
     // Direct auth.api calls with no request context (e.g. generateOpenAPISchema
