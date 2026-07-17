@@ -34,8 +34,8 @@ export const env = {
   DATABASE_FILE: process.env.DATABASE_FILE || DEFAULT_DATABASE_FILE,
   // Max Postgres connections PER instance. Total server connections =
   // DB_POOL_MAX × Cloud Run max-instances, which must stay under Cloud SQL
-  // max_connections (currently 1000). At max-instances 100, keep this ≤ 8
-  // (→ 800) so dev, migrations, and the superuser reserve still have room.
+  // max_connections (currently 800). At max-instances 80, 8 → 640, leaving
+  // room for dev (shares this instance), migrations, and the superuser reserve.
   DB_POOL_MAX: Number(process.env.DB_POOL_MAX) || 8,
   BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "",
   BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || "",
