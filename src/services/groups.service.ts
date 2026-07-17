@@ -207,11 +207,12 @@ const getHousePreferences = async (
 
 /**
  * Replace the caller's group's whole ranked house-choice set. Leader-only.
+ * Can be called any number of times while the house-pick window is open.
  * @param studentId CUNET id (from authMiddleware)
  * @param houseIds ranked house ids, most preferred first (rank = index + 1)
  * @throws {GroupsServiceError} NOT_FOUND if the student/group/a houseId can't be resolved,
- *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the group already confirmed
- *   or the house-pick deadline has passed, BAD_REQUEST if houseIds has duplicates
+ *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the house-pick deadline
+ *   has passed, BAD_REQUEST if houseIds has duplicates
  */
 const setHousePreferences = async (
   studentId: string,
@@ -221,8 +222,7 @@ const setHousePreferences = async (
   const database = deps.db ?? defaultDb;
   const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
-  if (group.confirmedAt || isEventPassed("rpkm_house_pick"))
-    throw new GroupsServiceError("HOUSE_PICK_CLOSED");
+  if (isEventPassed("rpkm_house_pick")) throw new GroupsServiceError("HOUSE_PICK_CLOSED");
   if (houseIds.length < 1 || houseIds.length > 5) throw new GroupsServiceError("BAD_REQUEST");
   if (new Set(houseIds).size !== houseIds.length) throw new GroupsServiceError("BAD_REQUEST");
 
@@ -381,40 +381,9 @@ const kickMember = async (
   return getGroupWithMembers(group, deps);
 };
 
-/**
- * Confirm the caller's group (POST /rpkm/houses/confirm). Leader-only.
- * House preferences are optional (0-5 allowed); confirmation only fails
- * if somehow more than 5 are set. Locks house-preferences and membership
- * changes for the group afterward.
- * @param studentId CUNET id (from authMiddleware)
- * @throws {GroupsServiceError} NOT_FRESHMEN, NOT_FOUND if the student or their group can't
- *   be resolved, NOT_LEADER, ALREADY_CONFIRMED, or TOO_MANY_HOUSE_PREFS
- */
-const confirmGroup = async (
-  studentId: string,
-  deps: GroupsDeps = {}
-): Promise<{ confirmedAt: Date }> => {
-  const database = deps.db ?? defaultDb;
-  if (!isFreshman(studentId)) throw new GroupsServiceError("NOT_FRESHMEN");
-  const { student, group } = await getCurrentGroup(studentId, deps);
-  if (group.leaderId !== student.id) throw new GroupsServiceError("NOT_LEADER");
-  if (group.confirmedAt) throw new GroupsServiceError("ALREADY_CONFIRMED");
-
-  const preferences = await database
-    .select()
-    .from(groupHouseChoices)
-    .where(eq(groupHouseChoices.groupId, group.id));
-  if (preferences.length < 1) throw new GroupsServiceError("HOUSE_PREF_INCOMPLETE");
-  if (preferences.length > 5) throw new GroupsServiceError("TOO_MANY_HOUSE_PREFS");
-
-  const confirmedAt = new Date();
-  await database.update(groups).set({ confirmedAt }).where(eq(groups.id, group.id));
-  return { confirmedAt };
-};
-
 // Namespace object — routes call `GroupsService.<fn>(...)` instead of
 // importing individual functions. Order matches the routes in
-// src/routes/rpkm/groups.ts, plus confirmGroup for POST /rpkm/houses/confirm.
+// src/routes/rpkm/groups.ts.
 export const GroupsService = {
   GroupsServiceError,
   join,
@@ -424,7 +393,6 @@ export const GroupsService = {
   regenerateJoinCode,
   leave,
   kickMember,
-  confirmGroup,
   isFreshman,
   resolveCurrentStudent,
   getCurrentGroup
