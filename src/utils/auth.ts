@@ -34,12 +34,29 @@ export const auth = betterAuth({
     // rejects them and the Google callback fails its state check.
     // SameSite=None requires Secure, so only apply over HTTPS; plain-http
     // local dev is same-site (localhost -> localhost) and Lax works there.
+    // Browsers are phasing out unpartitioned third-party cookies (CHIPS);
+    // Firefox already warns the OAuth state cookie "will soon be rejected
+    // because it is foreign". Partitioned keeps cookies set on cross-site
+    // fetch responses storable. Note a partitioned cookie set under a
+    // frontend's partition is NOT sent on the top-level Google callback to
+    // this API host — see account.skipStateCookieCheck below.
     ...(authProtocol === "https" && {
       defaultCookieAttributes: {
         sameSite: "none" as const,
-        secure: true
+        secure: true,
+        partitioned: true
       }
     })
+  },
+  account: {
+    // The OAuth state double-check cookie cannot round-trip for the
+    // cross-site cufirstdate2026.com frontend: it is set on a cross-site
+    // fetch response (partitioned under the frontend's site) but read on the
+    // top-level Google callback at api.rpkm2026.com (its own partition), so
+    // the browser never sends it back and the callback would fail with
+    // state_security_mismatch. The state itself is still validated against
+    // the single-use, 10-minute verification record in the database.
+    skipStateCookieCheck: true
   },
   baseURL: {
     // Single shared API host (see README's "Two frontends, one backend,
@@ -81,6 +98,13 @@ export const auth = betterAuth({
     // })
   ],
   emailAndPassword: {
+    enabled: false
+  },
+  // Better Auth enables its built-in rate limiter automatically in
+  // production (100 req/min per IP, stricter on sign-in paths). All auth
+  // traffic arrives via the two frontends' shared IPs/proxies, so the
+  // per-IP limit throttles legitimate bursts (e.g. event-day sign-ins).
+  rateLimit: {
     enabled: false
   },
   databaseHooks: {
