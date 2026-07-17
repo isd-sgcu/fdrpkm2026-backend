@@ -43,8 +43,10 @@ export const env = {
   // always reject (fail closed).
   DEV_API_KEY: process.env.DEV_API_KEY || "",
   // Bearer token Prometheus must present to scrape GET /metrics (see
-  // src/plugins/metrics.ts). Unset = /metrics always rejects (fail closed).
-  METRICS_TOKEN: process.env.METRICS_TOKEN || "metrics-token",
+  // src/plugins/metrics.ts). Unset = /metrics always rejects (fail closed) —
+  // must default to "" (falsy), NOT a literal, or the endpoint accepts a
+  // well-known token committed to the repo.
+  METRICS_TOKEN: process.env.METRICS_TOKEN || "",
   // S3-compatible object storage for uploads (Cloudflare R2 or any S3 API).
   // See docs/upload-guide.md.
   S3_ENDPOINT: process.env.S3_ENDPOINT || "",

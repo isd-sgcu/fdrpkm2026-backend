@@ -150,6 +150,20 @@ const join = async (
   if (targetMembers.length >= 4) throw new AppError("GROUP_FULL");
 
   await database.transaction(async (tx) => {
+    // Serialize concurrent joins to this group so the 4-member cap can't be
+    // raced: lock the group row, then re-count members inside the tx. The
+    // pre-tx check above is only a fast path.
+    await tx
+      .select({ id: groups.id })
+      .from(groups)
+      .where(eq(groups.id, targetGroup.id))
+      .for("update");
+    const currentMembers = await tx
+      .select({ id: registrations.id })
+      .from(registrations)
+      .where(eq(registrations.groupId, targetGroup.id));
+    if (currentMembers.length >= 4) throw new AppError("GROUP_FULL");
+
     await tx
       .update(registrations)
       .set({ groupId: targetGroup.id })

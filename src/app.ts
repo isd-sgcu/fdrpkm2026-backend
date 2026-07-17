@@ -4,7 +4,7 @@ import { Elysia } from "elysia";
 
 import { metricsPlugin } from "@src/plugins/metrics";
 import { requestLogger, traceIdFrom } from "@src/plugins/request-logger";
-import { corsOrigins, env } from "@src/config";
+import { corsOrigins, env, isAllowedOrigin } from "@src/config";
 import { apiRoutes } from "@src/routes";
 import { authMiddleware } from "@src/routes/auth";
 import { AppError, errorResponse, OpenAPI } from "@src/utils";
@@ -91,6 +91,19 @@ export const createApp = () =>
     // must be exposed for the bearer() fallback: browsers that block third-party
     // cookies need frontend JS to read the session token from that header.
     .use(cors({ origin: corsOrigins, credentials: true, exposeHeaders: ["set-auth-token"] }))
+    // App-wide CSRF defense for state-changing requests. The CORS allowlist only
+    // blocks requests that trigger a preflight; a cross-site form/multipart POST
+    // is CORS-safelisted (no preflight) and still carries the SameSite=None
+    // session cookie. Reject any non-GET carrying an Origin not on the allowlist.
+    // Browsers always send Origin cross-origin; same-origin and non-browser
+    // (bearer) clients omit it and are unaffected. `as: "global"` so it covers
+    // every mounted route, not just this instance.
+    .onBeforeHandle({ as: "global" }, ({ request }) => {
+      const method = request.method;
+      if (method === "GET" || method === "HEAD" || method === "OPTIONS") return;
+      const origin = request.headers.get("origin");
+      if (origin && !isAllowedOrigin(origin)) throw new AppError("FORBIDDEN");
+    })
     // OpenAPI docs (Scalar UI at /openapi) — dev/staging only, not in production.
     .use(
       env.NODE_ENV === "production"
