@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 
 import { authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
 import { authMiddleware } from "@src/routes/auth";
+import { requestLogger } from "@src/plugins/request-logger";
 import { FdRegistrationModel } from "@src/models/fd-registration.model";
 import { FirstDateService } from "@src/services/firstdate.service";
 
@@ -16,11 +17,18 @@ import { FirstDateService } from "@src/services/firstdate.service";
  */
 export const firstdateUserRoutes = new Elysia({ prefix: "/fd/users" })
   .use(authMiddleware)
+  .use(requestLogger)
   .use(FdRegistrationModel)
   .prefix("model", "FdUser.")
   .post(
     "/registration",
-    async ({ user, body }) => successResponse(FirstDateService.registerFd(user, body)),
+    async ({ user, body, log }) => {
+      const result = await FirstDateService.registerFd(user, body);
+      // Business event for the `fd_registrations` log-based metric. Logged only
+      // after the service resolves, so ALREADY_REGISTERED retries don't count.
+      log.info("fd.registration.created", { event: "fd.registration.created" });
+      return successResponse(result);
+    },
     {
       auth: true,
       detail: {

@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 
+import { avatarRoutes } from "./avatar";
 import { devRoutes } from "./dev";
 import { firstdateRoutes } from "./firstdate";
 import { firstdateUserRoutes } from "./firstdate/users";
@@ -16,6 +17,7 @@ export const apiRoutes = new Elysia({ prefix: "/v1" })
   // production; additionally guarded by the x-dev-key header (see dev.ts).
   .use(isDev ? devRoutes : new Elysia())
   .use(healthRoutes)
+  .use(avatarRoutes)
   .use(firstdateRoutes)
   .use(firstdateUserRoutes)
   .use(rpkmRoutes)

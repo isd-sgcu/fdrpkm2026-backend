@@ -26,6 +26,20 @@ export const auth = betterAuth({
     }
   },
   secret: env.BETTER_AUTH_SECRET || "",
+  advanced: {
+    // The cufirstdate2026.com frontend (and localhost dev against staging) is
+    // cross-site to api.rpkm2026.com, so cookies set on sign-in responses —
+    // notably the OAuth `state` cookie — need SameSite=None or the browser
+    // rejects them and the Google callback fails its state check.
+    // SameSite=None requires Secure, so only apply over HTTPS; plain-http
+    // local dev is same-site (localhost -> localhost) and Lax works there.
+    ...(authProtocol === "https" && {
+      defaultCookieAttributes: {
+        sameSite: "none" as const,
+        secure: true
+      }
+    })
+  },
   baseURL: {
     // Single shared API host (see README's "Two frontends, one backend,
     // one API host") — Better Auth checks the request's

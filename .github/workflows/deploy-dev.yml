@@ -85,6 +85,8 @@ jobs:
           GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           BETTER_AUTH_URL: ${{ vars.BETTER_AUTH_URL }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          ASSET_BASE_URL: ${{ vars.ASSET_BASE_URL }}
         run: |
           required=(
             GCP_PROJECT_ID
@@ -96,6 +98,8 @@ jobs:
             GCP_WORKLOAD_IDENTITY_PROVIDER
             GCP_SERVICE_ACCOUNT
             BETTER_AUTH_URL
+            S3_BUCKET
+            ASSET_BASE_URL
           )
 
           for name in "${required[@]}"; do
@@ -208,7 +212,7 @@ jobs:
               --execution-environment gen1
               --min-instances 0
               --max-instances 1
-              --memory 256Mi
+              --memory 512Mi
               --cpu 1
               --cpu-throttling
               --update-env-vars "${runtime_env_vars}"

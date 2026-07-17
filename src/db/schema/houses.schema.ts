@@ -15,8 +15,8 @@ export const houses = t.pgTable("houses", {
 
 // friend group (<=4). leaderId runs it; members live on registrations.groupId (leader is also a member).
 // assignedHouseId set by the draw. joinCode = regenerable 6-digit.
-// confirmedAt set by the leader (POST /rpkm/houses/confirm) once all 5 house
-// picks are in — locks house-preferences/members for this group after that.
+// confirmedAt is no longer set by students, but is populated via a post-processing script
+// after the house draw to lock group memberships (join/leave/kick/regenerate).
 export const groups = t.pgTable("groups", {
   ...id,
   leaderId: t
