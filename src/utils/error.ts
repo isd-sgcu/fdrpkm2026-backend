@@ -9,7 +9,7 @@ export const AppErrorCode = {
   ALREADY_CHECKED_IN: 409,
   /** 409: checkpoint already scanned by this student (rpkm games). */
   ALREADY_COLLECTED: 409,
-  /** 409: group already confirmed — cannot confirm again, join it, or change its membership. */
+  /** 409: group already confirmed — cannot join it or change its membership. */
   ALREADY_CONFIRMED: 409,
   /** 409: user already registered for this project. */
   ALREADY_REGISTERED: 409,
@@ -23,10 +23,8 @@ export const AppErrorCode = {
   GAME_CLOSED: 403,
   /** 409: target group already has the max number of members (4). */
   GROUP_FULL: 409,
-  /** 409: group is confirmed — house preferences can no longer be changed. */
+  /** 409: house-pick deadline has passed — house preferences can no longer be changed. */
   HOUSE_PICK_CLOSED: 409,
-  /** 400: fewer than 1 ranked house preferences set, cannot confirm yet. */
-  HOUSE_PREF_INCOMPLETE: 400,
   /** 500: unexpected server-side error, request could not be fulfilled. */
   INTERNAL_SERVER_ERROR: 500,
   /** 409: student already registered for this walk rally activity. */
@@ -63,8 +61,6 @@ export const AppErrorCode = {
   RESULT_NOT_ANNOUNCED: 403,
   /** 404: student_id from QR does not match any student. */
   STUDENT_NOT_FOUND: 404,
-  /** 400: more than 5 ranked house preferences set, cannot confirm. */
-  TOO_MANY_HOUSE_PREFS: 400,
   /** 401: request lacks valid authentication credentials. */
   UNAUTHORIZED: 401,
   /** 409: user already exists, cannot register again. */

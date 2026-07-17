@@ -1,16 +1,8 @@
 import { Elysia, t } from "elysia";
 import { authMiddleware } from "@src/routes/auth";
 import { HousesModel } from "@src/models/houses.model";
-import { GroupsService } from "@src/services/groups.service";
 import { HousesService } from "@src/services/houses.service";
-import {
-  AppError,
-  authSecurity,
-  isFreshman,
-  successResponse,
-  tAppErrors,
-  tSuccessResponse
-} from "@src/utils";
+import { AppError, authSecurity, isFreshman, tAppErrors, tSuccessResponse } from "@src/utils";
 
 export const houseRoute = new Elysia({ prefix: "/houses" })
   .use(authMiddleware)
@@ -84,33 +76,6 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
       response: {
         200: tSuccessResponse(HousesModel.models.houseResult.Schema()),
         ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN", "RESULT_NOT_ANNOUNCED", "NOT_FOUND")
-      }
-    }
-  )
-  .post(
-    "/confirm",
-    async ({ studentId }) => successResponse(GroupsService.confirmGroup(studentId)),
-    {
-      auth: true,
-      detail: {
-        security: authSecurity,
-        tags: ["RPKM - Houses"],
-        summary: "Confirm my group's house preferences",
-        description:
-          "Leader only. Locks the group (members and house preferences become immutable). " +
-          "Requires a complete, valid preference list."
-      },
-      response: {
-        200: tSuccessResponse(HousesModel.models.confirmResponse.Schema()),
-        ...tAppErrors(
-          "TOO_MANY_HOUSE_PREFS",
-          "HOUSE_PREF_INCOMPLETE",
-          "UNAUTHORIZED",
-          "NOT_FRESHMEN",
-          "NOT_LEADER",
-          "NOT_FOUND",
-          "ALREADY_CONFIRMED"
-        )
       }
     }
   );

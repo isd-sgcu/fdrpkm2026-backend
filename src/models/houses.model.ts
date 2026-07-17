@@ -18,9 +18,6 @@ export const HousesModel = new Elysia().model({
   houseId: t.Object({
     id: t.String({ format: "uuid", title: "House ID" })
   }),
-  confirmResponse: t.Object({
-    confirmedAt: t.Date({ title: "Confirmed At" })
-  }),
   houseStat: t.Object({
     houseId: t.String({ format: "uuid", title: "House ID" }),
     code: t.String({ title: "House Code" }),
