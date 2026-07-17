@@ -49,7 +49,31 @@ export const env = {
   S3_BUCKET: process.env.S3_BUCKET || "",
   S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "",
   S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY || "",
-  // Public base URL to read uploaded objects back from (CDN/public bucket
-  // domain). Leave unset to fall back to presigned GET URLs.
+  // Public base URL uploaded objects are served from (public bucket/CDN
+  // domain), e.g. https://storage.googleapis.com/<bucket>. REQUIRED for avatar
+  // uploads — the stored user.image URL is built from it. Leaving it unset
+  // makes uploads fail loudly (see src/utils/storage.ts) rather than persist an
+  // expiring presigned URL.
   ASSET_BASE_URL: process.env.ASSET_BASE_URL || ""
 } as const;
+
+// Browser origins allowed to make credentialed (cookie) requests to this API.
+// Mirrors better-auth's trustedOrigins (src/utils/auth.ts). Used to pin CORS
+// and to reject cross-site state-changing requests on cookie-authed routes
+// (CSRF defense), since better-auth's own origin check does not cover custom
+// Elysia routes like /v1/me/avatar.
+const PROD_ORIGINS = ["https://cufirstdate2026.com", "https://rpkm2026.com"];
+const DEV_ORIGIN_PATTERNS = [
+  /^http:\/\/localhost:\d+$/,
+  /^https:\/\/([a-z0-9-]+\.)?cufirstdate2026\.com$/,
+  /^https:\/\/([a-z0-9-]+\.)?rpkm2026\.com$/
+];
+
+/** True if `origin` (a browser Origin header value) is a trusted frontend. */
+export const isAllowedOrigin = (origin: string): boolean =>
+  PROD_ORIGINS.includes(origin) ||
+  (env.NODE_ENV !== "production" && DEV_ORIGIN_PATTERNS.some((re) => re.test(origin)));
+
+/** Value for @elysiajs/cors `origin` (string | RegExp entries). */
+export const corsOrigins: (string | RegExp)[] =
+  env.NODE_ENV === "production" ? PROD_ORIGINS : [...PROD_ORIGINS, ...DEV_ORIGIN_PATTERNS];

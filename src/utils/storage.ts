@@ -1,5 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { env } from "@src/config";
 
@@ -16,8 +15,6 @@ const s3 = new S3Client({
   }
 });
 
-const PRESIGNED_GET_EXPIRY_SECONDS = 3600;
-
 export const uploadObject = async (key: string, file: File): Promise<void> => {
   await s3.send(
     new PutObjectCommand({
@@ -29,13 +26,22 @@ export const uploadObject = async (key: string, file: File): Promise<void> => {
   );
 };
 
-// If ASSET_BASE_URL is set (public bucket/CDN domain), build a direct URL —
-// no request to S3 needed. Otherwise fall back to a presigned GET, which
-// works for private buckets but expires and must be re-issued on read.
-export const getObjectUrl = (key: string): Promise<string> => {
-  if (env.ASSET_BASE_URL) return Promise.resolve(`${env.ASSET_BASE_URL}/${key}`);
+export const deleteObject = async (key: string): Promise<void> => {
+  await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+};
 
-  return getSignedUrl(s3, new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }), {
-    expiresIn: PRESIGNED_GET_EXPIRY_SECONDS
-  });
+// Avatars are public content, so we serve them from a stable public base URL
+// (ASSET_BASE_URL = the public bucket/CDN domain) and persist THAT into
+// user.image. We deliberately do NOT fall back to a presigned GET: a presigned
+// URL expires (default 1h), and persisting an expiring URL into the DB means
+// every avatar 403s an hour after upload. Fail loudly instead so a
+// misconfigured deploy is caught immediately rather than silently rotting.
+export const getObjectUrl = async (key: string): Promise<string> => {
+  if (!env.ASSET_BASE_URL) {
+    throw new Error(
+      "ASSET_BASE_URL is not set — cannot build a stable public avatar URL. " +
+        "Set it to the public bucket/CDN base (e.g. https://storage.googleapis.com/<bucket>)."
+    );
+  }
+  return `${env.ASSET_BASE_URL}/${key}`;
 };
