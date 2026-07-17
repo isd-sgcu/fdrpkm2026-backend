@@ -16,7 +16,15 @@ const usePGlite = env.NODE_ENV === "development" && !env.DATABASE_URL;
 // whole process — even with no request in flight. Log it instead; the pool
 // discards the bad client and the next query gets a fresh one.
 const createPgPool = (): Pool => {
-  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  const pool = new Pool({
+    connectionString: env.DATABASE_URL,
+    // Bounded per-instance pool so horizontal scaling can't exhaust Cloud SQL
+    // connections (see env.DB_POOL_MAX). Under burst, wait up to 10s for a free
+    // connection rather than erroring instantly.
+    max: env.DB_POOL_MAX,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000
+  });
   pool.on("error", (err) => {
     logger.error("db.idle_client_error", {
       errorMessage: err instanceof Error ? err.message : String(err),
