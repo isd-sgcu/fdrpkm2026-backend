@@ -75,8 +75,10 @@ export const createApp = () =>
     // final status (including statuses the error handler sets above).
     .use(requestLogger)
     // Explicit allowlist instead of the reflect-any-origin default — only the
-    // known frontends may make credentialed cross-origin calls.
-    .use(cors({ origin: corsOrigins, credentials: true }))
+    // known frontends may make credentialed cross-origin calls. `set-auth-token`
+    // must be exposed for the bearer() fallback: browsers that block third-party
+    // cookies need frontend JS to read the session token from that header.
+    .use(cors({ origin: corsOrigins, credentials: true, exposeHeaders: ["set-auth-token"] }))
     // OpenAPI docs (Scalar UI at /openapi) — dev/staging only, not in production.
     .use(
       env.NODE_ENV === "production"
