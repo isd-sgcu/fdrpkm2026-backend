@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 
 import { isAllowedOrigin } from "@src/config";
 import { AvatarModel } from "@src/models/avatar.model";
+import { requestLogger } from "@src/plugins/request-logger";
 import { authMiddleware } from "@src/routes/auth";
 import { AvatarService } from "@src/services/avatar.service";
 import { AppError, authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
@@ -13,11 +14,18 @@ import { AppError, authSecurity, successResponse, tAppErrors, tSuccessResponse }
  */
 export const avatarRoutes = new Elysia({ prefix: "/me" })
   .use(authMiddleware)
+  .use(requestLogger)
   .use(AvatarModel)
   .prefix("model", "Avatar.")
   .post(
     "/avatar",
-    async ({ user, body }) => successResponse(AvatarService.updateAvatar(user.id, body.file)),
+    async ({ user, body, log }) => {
+      const result = await AvatarService.updateAvatar(user.id, body.file);
+      // Re-uploads overwrite user.image, so upload activity is only countable
+      // here (log-based metric), not from the DB.
+      log.info("avatar.uploaded", { event: "avatar.uploaded" });
+      return successResponse(result);
+    },
     {
       auth: true,
       // CSRF defense: reject credentialed cross-site POSTs. Browsers always send

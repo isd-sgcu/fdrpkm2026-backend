@@ -2,6 +2,7 @@ import { cors } from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 
+import { metricsPlugin } from "@src/plugins/metrics";
 import { requestLogger, traceIdFrom } from "@src/plugins/request-logger";
 import { corsOrigins, env } from "@src/config";
 import { apiRoutes } from "@src/routes";
@@ -32,6 +33,14 @@ export const createApp = () =>
       // `code` property, which for AppError is the domain code ("FORBIDDEN",
       // "NOT_FOUND", ...) — it would never equal a registered class name.
       if (error instanceof AppError) {
+        // Business event for an `app_errors` log-based metric, grouped by
+        // errorCode (ALREADY_CHECKED_IN, OUT_OF_GEOFENCE, ROUND_CONFLICT, ...).
+        // The access log only carries route+status, not the domain code.
+        logger.info("app.error", {
+          traceId: traceIdFrom(request.headers.get("x-cloud-trace-context")),
+          event: "app.error",
+          errorCode: error.code
+        });
         return status(error.httpStatus, errorResponse(error.code, error.context));
       }
       switch (code) {
@@ -74,6 +83,9 @@ export const createApp = () =>
     // Registered AFTER onError so the access log's onAfterResponse reads the
     // final status (including statuses the error handler sets above).
     .use(requestLogger)
+    // Prometheus HTTP metrics + GET /metrics (bearer-guarded via METRICS_TOKEN).
+    // After requestLogger so it can reuse requestStartedAt for durations.
+    .use(metricsPlugin)
     // Explicit allowlist instead of the reflect-any-origin default — only the
     // known frontends may make credentialed cross-origin calls. `set-auth-token`
     // must be exposed for the bearer() fallback: browsers that block third-party

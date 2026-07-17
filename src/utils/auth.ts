@@ -6,6 +6,7 @@ import { bearer, openAPI } from "better-auth/plugins";
 import { db } from "@src/db";
 import { env } from "@src/config";
 import * as schema from "@src/db/schema";
+import { logger } from "@src/utils/logger";
 
 const authProtocol = env.BETTER_AUTH_URL.startsWith("https://") ? "https" : "http";
 
@@ -81,6 +82,19 @@ export const auth = betterAuth({
   ],
   emailAndPassword: {
     enabled: false
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        // A session row is created exactly once per successful sign-in
+        // (Google callback), so this is the sign-in event for the log-based
+        // metric. Requests through the mounted better-auth handler bypass
+        // Elysia hooks, so this can't live in a route.
+        after: async () => {
+          logger.info("auth.sign_in", { event: "auth.sign_in" });
+        }
+      }
+    }
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {

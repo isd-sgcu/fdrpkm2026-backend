@@ -1,4 +1,5 @@
 import { GroupsModel } from "@src/models/groups.model";
+import { requestLogger } from "@src/plugins/request-logger";
 import { authMiddleware } from "@src/routes/auth";
 import { GroupsService } from "@src/services/groups.service";
 import { authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
@@ -10,11 +11,18 @@ import { Elysia } from "elysia";
 // eslint-disable-next-line drizzle/enforce-delete-with-where -- flags the whole chain below for its .delete(...) route method (not a Drizzle query)
 export const groupRoute = new Elysia({ prefix: "/groups" })
   .use(authMiddleware)
+  .use(requestLogger)
   .use(GroupsModel)
   .prefix("model", "Groups.")
   .post(
     "join",
-    async ({ studentId, body }) => successResponse(GroupsService.join(studentId, body.joinCode)),
+    async ({ studentId, body, log }) => {
+      const result = await GroupsService.join(studentId, body.joinCode);
+      // Business event for the `rpkm_group_ops` log-based metric (join/leave/
+      // kick leave no countable row behind — membership just moves).
+      log.info("rpkm.group.joined", { event: "rpkm.group.joined" });
+      return successResponse(result);
+    },
     {
       auth: true,
       detail: {
@@ -57,8 +65,13 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
   })
   .post(
     "me/join-code/regenerate",
-    async ({ studentId }) =>
-      successResponse({ joinCode: await GroupsService.regenerateJoinCode(studentId) }),
+    async ({ studentId, log }) => {
+      const joinCode = await GroupsService.regenerateJoinCode(studentId);
+      log.info("rpkm.group.join_code_regenerated", {
+        event: "rpkm.group.join_code_regenerated"
+      });
+      return successResponse({ joinCode });
+    },
     {
       auth: true,
       detail: {
@@ -100,8 +113,13 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
   )
   .put(
     "me/house-preferences",
-    async ({ studentId, body }) =>
-      successResponse(GroupsService.setHousePreferences(studentId, body.houseIds)),
+    async ({ studentId, body, log }) => {
+      const result = await GroupsService.setHousePreferences(studentId, body.houseIds);
+      // Resubmissions overwrite the same rows, so the DB gauge can't count
+      // submission activity — only this event can.
+      log.info("rpkm.house_preferences.updated", { event: "rpkm.house_preferences.updated" });
+      return successResponse(result);
+    },
     {
       auth: true,
       detail: {
@@ -126,25 +144,36 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       }
     }
   )
-  .delete("me", async ({ studentId }) => successResponse(GroupsService.leave(studentId)), {
-    auth: true,
-    detail: {
-      security: authSecurity,
-      tags: ["RPKM - Groups"],
-      summary: "Leave my group",
-      description:
-        "Leaves the current group and lands the freshman back in a fresh solo group. " +
-        "Rejected once the group is confirmed."
+  .delete(
+    "me",
+    async ({ studentId, log }) => {
+      const result = await GroupsService.leave(studentId);
+      log.info("rpkm.group.left", { event: "rpkm.group.left" });
+      return successResponse(result);
     },
-    response: {
-      200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
-      ...tAppErrors("UNAUTHORIZED", "NOT_FOUND", "ALREADY_CONFIRMED", "INTERNAL_SERVER_ERROR")
+    {
+      auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Groups"],
+        summary: "Leave my group",
+        description:
+          "Leaves the current group and lands the freshman back in a fresh solo group. " +
+          "Rejected once the group is confirmed."
+      },
+      response: {
+        200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
+        ...tAppErrors("UNAUTHORIZED", "NOT_FOUND", "ALREADY_CONFIRMED", "INTERNAL_SERVER_ERROR")
+      }
     }
-  })
+  )
   .delete(
     "me/members/:userId",
-    async ({ studentId, params }) =>
-      successResponse(GroupsService.kickMember(studentId, params.userId)),
+    async ({ studentId, params, log }) => {
+      const result = await GroupsService.kickMember(studentId, params.userId);
+      log.info("rpkm.group.member_kicked", { event: "rpkm.group.member_kicked" });
+      return successResponse(result);
+    },
     {
       auth: true,
       detail: {

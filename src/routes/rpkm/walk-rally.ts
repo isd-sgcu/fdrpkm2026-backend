@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 
+import { requestLogger } from "@src/plugins/request-logger";
 import { authMiddleware } from "@src/routes/auth";
 import { WalkRallyModel } from "@src/models/walk-rally.model";
 import { WalkRallyService } from "@src/services/walk-rally.service";
@@ -19,6 +20,7 @@ import {
 // eslint-disable-next-line drizzle/enforce-delete-with-where -- flags the whole chain below for its .delete(...) route method (not a Drizzle query)
 export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
   .use(authMiddleware)
+  .use(requestLogger)
   .use(WalkRallyModel)
   .prefix("model", "WalkRally.")
   .get(
@@ -69,9 +71,14 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
   )
   .post(
     "/registrations",
-    async ({ studentId, body }) => {
+    async ({ studentId, body, log }) => {
       if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
-      return successResponse(WalkRallyService.registerForActivity(studentId, body));
+      const result = await WalkRallyService.registerForActivity(studentId, body);
+      // Business events for the `walkrally_slot_ops` log-based metric —
+      // unregister/change delete or mutate the row, so slot churn is only
+      // visible here; the DB gauge shows net occupancy.
+      log.info("rpkm.walkrally.registered", { event: "rpkm.walkrally.registered" });
+      return successResponse(result);
     },
     {
       auth: true,
@@ -101,9 +108,11 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
   )
   .delete(
     "/registrations/:code",
-    async ({ studentId, params }) => {
+    async ({ studentId, params, log }) => {
       if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
-      return successResponse(WalkRallyService.unregisterFromActivity(studentId, params.code));
+      const result = await WalkRallyService.unregisterFromActivity(studentId, params.code);
+      log.info("rpkm.walkrally.unregistered", { event: "rpkm.walkrally.unregistered" });
+      return successResponse(result);
     },
     {
       auth: true,
@@ -128,10 +137,12 @@ export const walkRallyRoute = new Elysia({ prefix: "/walkrally" })
   )
   .patch(
     "/registrations/:code",
-    async ({ studentId, params, body }) => {
+    async ({ studentId, params, body, log }) => {
       if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
 
-      return successResponse(WalkRallyService.changeRound(studentId, params.code, body.round));
+      const result = await WalkRallyService.changeRound(studentId, params.code, body.round);
+      log.info("rpkm.walkrally.round_changed", { event: "rpkm.walkrally.round_changed" });
+      return successResponse(result);
     },
     {
       auth: true,
