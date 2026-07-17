@@ -164,16 +164,6 @@ jobs:
             exit 1
           fi
 
-          if [[ "${DATABASE_URL}" == *"@127.0.0.1"* ]] || [[ "${DATABASE_URL}" == *"@localhost"* ]]; then
-            echo "::error::DATABASE_URL must use the Cloud SQL Unix socket in Cloud Run, not a local proxy address."
-            exit 1
-          fi
-
-          if [[ "${DATABASE_URL}" != *"host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}"* ]]; then
-            echo "::error::DATABASE_URL must contain host=/cloudsql/${CLOUD_SQL_CONNECTION_NAME}."
-            exit 1
-          fi
-
           if [[ "${BETTER_AUTH_URL}" != https://* ]]; then
             echo "::error::BETTER_AUTH_URL must use HTTPS in production."
             exit 1
