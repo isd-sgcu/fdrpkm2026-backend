@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 import { authMiddleware } from "@src/routes/auth";
+import { requestLogger } from "@src/plugins/request-logger";
 import { RpkmService } from "@src/services/rpkm.service";
 import { authSecurity, successResponse, tAppErrors, tSuccessResponse } from "@src/utils";
 import { CheckinModel } from "@src/models/checkin.model";
@@ -9,13 +10,18 @@ import { CheckinModel } from "@src/models/checkin.model";
 // AppError thrown in checkin.helper.ts.
 export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
   .use(authMiddleware)
+  .use(requestLogger)
   .use(CheckinModel)
   .prefix("model", "Checkin.")
   .post(
     "/registration",
-    async ({ user, body }) => {
+    async ({ user, body, log }) => {
       const staffCunetId = user.email?.split("@")[0] ?? "";
-      return successResponse(RpkmService.checkinRegistration(staffCunetId, body.student_id));
+      const result = await RpkmService.checkinRegistration(staffCunetId, body.student_id);
+      // Business event for the `rpkm_checkins` log-based metric. Logged only
+      // after the scan succeeds — ALREADY_CHECKED_IN rejections don't count.
+      log.info("rpkm.checkin.success", { event: "rpkm.checkin.success" });
+      return successResponse(result);
     },
     {
       auth: true,
@@ -42,9 +48,13 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
   )
   .post(
     "/freshmennight",
-    async ({ user, body }) => {
+    async ({ user, body, log }) => {
       const staffCunetId = user.email?.split("@")[0] ?? "";
-      return successResponse(RpkmService.checkinFreshmenNight(staffCunetId, body.student_id));
+      const result = await RpkmService.checkinFreshmenNight(staffCunetId, body.student_id);
+      // Business event for the `freshmennight_checkins` log-based metric.
+      // Logged only after the scan succeeds.
+      log.info("freshmennight.checkin.success", { event: "freshmennight.checkin.success" });
+      return successResponse(result);
     },
     {
       auth: true,
