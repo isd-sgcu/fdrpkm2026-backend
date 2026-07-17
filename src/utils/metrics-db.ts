@@ -1,4 +1,4 @@
-import { count, countDistinct, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, count, countDistinct, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { Gauge } from "prom-client";
 
 import { db } from "@src/db";
@@ -105,6 +105,39 @@ const travelLegsGauge = gauge("fdrpkm_travel_legs", "Registered travel legs, by 
   "vehicle"
 ]);
 const activeSessionsGauge = gauge("fdrpkm_active_sessions", "Unexpired better-auth sessions");
+const registrationsUngroupedGauge = gauge(
+  "fdrpkm_registrations_ungrouped",
+  "RPKM freshman registrations not yet in a friend group"
+);
+const houseAssignedStudentsGauge = gauge(
+  "fdrpkm_house_assigned_students",
+  "Students whose group was assigned to a house, by house (compare with fdrpkm_house_capacity)",
+  ["house"]
+);
+const staffRegistrationsGauge = gauge(
+  "fdrpkm_staff_registrations",
+  "Staff registrations, by staff role",
+  ["staff_role"]
+);
+const groupsConfirmedGauge = gauge(
+  "fdrpkm_groups_confirmed",
+  "RPKM groups locked after the house draw (confirmedAt set)"
+);
+const checkpointScansGauge = gauge(
+  "fdrpkm_checkpoint_scans",
+  "Scans per checkpoint; a checkpoint stuck at 0 while others climb is likely a dead QR",
+  ["game", "checkpoint"]
+);
+const attendedDaysGauge = gauge(
+  "fdrpkm_attended_days",
+  "RPKM registrations by attended day count",
+  ["days"]
+);
+const studentsByRoleGauge = gauge(
+  "fdrpkm_students_by_role",
+  "Students by role (student vs staff); fdrpkm_students stays the overall total",
+  ["role"]
+);
 
 async function refresh(): Promise<void> {
   // Sub-select: member count per group (membership lives on
@@ -128,7 +161,13 @@ async function refresh(): Promise<void> {
     walkRallyAttendanceRows,
     gameRows,
     travelLegRows,
-    sessionRows
+    sessionRows,
+    ungroupedRows,
+    houseAssignedRows,
+    staffRegistrationRows,
+    checkpointScanRows,
+    attendedDaysRows,
+    studentRoleRows
   ] = await Promise.all([
     db.select({ n: count() }).from(students),
     db
@@ -136,7 +175,13 @@ async function refresh(): Promise<void> {
       .from(registrations)
       .groupBy(registrations.project),
     db.select({ project: entries.project, n: count() }).from(entries).groupBy(entries.project),
-    db.select({ total: count(), assigned: count(groups.assignedHouseId) }).from(groups),
+    db
+      .select({
+        total: count(),
+        assigned: count(groups.assignedHouseId),
+        confirmed: count(groups.confirmedAt)
+      })
+      .from(groups),
     db.select({ size: groupSizes.size, n: count() }).from(groupSizes).groupBy(groupSizes.size),
     db.select({ house: houses.code, capacity: houses.capacity }).from(houses),
     db
@@ -178,13 +223,51 @@ async function refresh(): Promise<void> {
     db
       .select({ n: count() })
       .from(session)
-      .where(gt(session.expiresAt, sql`now()`))
+      .where(gt(session.expiresAt, sql`now()`)),
+    // staffRole is never set on grouped freshmen registrations, but staff also
+    // never join groups — exclude them so this counts freshmen only.
+    db
+      .select({ n: count() })
+      .from(registrations)
+      .where(
+        and(
+          eq(registrations.project, "rpkm"),
+          isNull(registrations.groupId),
+          isNull(registrations.staffRole)
+        )
+      ),
+    db
+      .select({ house: houses.code, n: count() })
+      .from(registrations)
+      .innerJoin(groups, eq(registrations.groupId, groups.id))
+      .innerJoin(houses, eq(groups.assignedHouseId, houses.id))
+      .groupBy(houses.code),
+    db
+      .select({ staffRole: registrations.staffRole, n: count() })
+      .from(registrations)
+      .where(isNotNull(registrations.staffRole))
+      .groupBy(registrations.staffRole),
+    // LEFT JOIN from checkpoints so a checkpoint nobody scanned reports 0
+    // instead of disappearing — that's the dead-QR signal.
+    db
+      .select({ game: checkpoints.game, checkpoint: checkpoints.code, n: count(scans.id) })
+      .from(checkpoints)
+      .leftJoin(scans, eq(scans.checkpointId, checkpoints.id))
+      .groupBy(checkpoints.game, checkpoints.code),
+    db
+      .select({ days: registrations.attendedDays, n: count() })
+      .from(registrations)
+      .where(isNotNull(registrations.attendedDays))
+      .groupBy(registrations.attendedDays),
+    db.select({ role: students.role, n: count() }).from(students).groupBy(students.role)
   ]);
 
   studentsGauge.set(Number(studentRows[0]?.n ?? 0));
   activeSessionsGauge.set(Number(sessionRows[0]?.n ?? 0));
   groupsGauge.set(Number(groupRows[0]?.total ?? 0));
   groupsAssignedGauge.set(Number(groupRows[0]?.assigned ?? 0));
+  groupsConfirmedGauge.set(Number(groupRows[0]?.confirmed ?? 0));
+  registrationsUngroupedGauge.set(Number(ungroupedRows[0]?.n ?? 0));
 
   // Reset before set so label combinations that dropped to zero rows (e.g. all
   // size-4 groups dissolved) don't keep reporting their last value forever.
@@ -225,4 +308,27 @@ async function refresh(): Promise<void> {
 
   travelLegsGauge.reset();
   for (const r of travelLegRows) travelLegsGauge.set({ vehicle: r.vehicle }, Number(r.n));
+
+  houseAssignedStudentsGauge.reset();
+  for (const r of houseAssignedRows) {
+    houseAssignedStudentsGauge.set({ house: r.house }, Number(r.n));
+  }
+
+  staffRegistrationsGauge.reset();
+  for (const r of staffRegistrationRows) {
+    if (r.staffRole !== null) staffRegistrationsGauge.set({ staff_role: r.staffRole }, Number(r.n));
+  }
+
+  checkpointScansGauge.reset();
+  for (const r of checkpointScanRows) {
+    checkpointScansGauge.set({ game: r.game, checkpoint: r.checkpoint }, Number(r.n));
+  }
+
+  attendedDaysGauge.reset();
+  for (const r of attendedDaysRows) {
+    if (r.days !== null) attendedDaysGauge.set({ days: String(r.days) }, Number(r.n));
+  }
+
+  studentsByRoleGauge.reset();
+  for (const r of studentRoleRows) studentsByRoleGauge.set({ role: r.role }, Number(r.n));
 }
