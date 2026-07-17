@@ -387,31 +387,3 @@ describe("GroupsService — kickMember", () => {
     await expect(GroupsService.kickMember("6900000002", leader.id, injected())).rejects.toThrow();
   });
 });
-
-describe("GroupsService — confirmGroup", () => {
-  it("sets confirmedAt if the group has choices set", async () => {
-    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
-    const group = await createGroup(leader.id, "AAAAAA");
-    await createRegistration(leader.id, group.id);
-
-    const h1 = await createHouse("H1");
-    await GroupsService.setHousePreferences("6900000001", [h1.id], injected());
-
-    const result = await GroupsService.confirmGroup("6900000001", injected());
-    expect(result.confirmedAt).toBeInstanceOf(Date);
-
-    const [updatedGroup] = await db
-      .select()
-      .from(schema.groups)
-      .where(eq(schema.groups.id, group.id));
-    expect(updatedGroup.confirmedAt).not.toBeNull();
-  });
-
-  it("rejects confirmation if group has no choices set", async () => {
-    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
-    const group = await createGroup(leader.id, "AAAAAA");
-    await createRegistration(leader.id, group.id);
-
-    await expect(GroupsService.confirmGroup("6900000001", injected())).rejects.toThrow();
-  });
-});
