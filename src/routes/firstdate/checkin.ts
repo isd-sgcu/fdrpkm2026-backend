@@ -1,17 +1,24 @@
 import { Elysia } from "elysia";
 import { authSecurity, successResponse, tAppErrors } from "@src/utils";
 import { authMiddleware } from "@src/routes/auth";
+import { requestLogger } from "@src/plugins/request-logger";
 import { FirstDateService } from "@src/services/firstdate.service";
 import { CheckinModel } from "@src/models/checkin.model";
 
 export const fdCheckinRoutes = new Elysia({ prefix: "/checkin" })
   .use(authMiddleware)
+  .use(requestLogger)
   .use(CheckinModel)
   .prefix("model", "Checkin.")
   .post(
     "/registration",
-    async ({ body, studentId }) =>
-      successResponse(FirstDateService.checkinFirstDate(studentId, body.student_id)),
+    async ({ body, studentId, log }) => {
+      const result = await FirstDateService.checkinFirstDate(studentId, body.student_id);
+      // Business event for the `fd_checkins` log-based metric. Logged only
+      // after the scan succeeds — ALREADY_CHECKED_IN rejections don't count.
+      log.info("fd.checkin.success", { event: "fd.checkin.success" });
+      return successResponse(result);
+    },
     {
       auth: true,
       detail: {
