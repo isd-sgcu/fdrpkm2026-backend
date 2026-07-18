@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it, mock } from "bun:test";
+import { and, eq } from "drizzle-orm";
 import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 
@@ -46,6 +47,15 @@ beforeAll(async () => {
       lastName: "Man"
     })
     .returning();
+  const [groupMate] = await db
+    .insert(schema.students)
+    .values({
+      studentId: "6912345679",
+      email: "group-mate@student.chula.ac.th",
+      firstName: "Group",
+      lastName: "Mate"
+    })
+    .returning();
 
   await db.insert(schema.registrations).values([
     { studentId: freshman!.id, project: "firstdate", pdpaAcceptedAt: new Date() },
@@ -64,6 +74,21 @@ beforeAll(async () => {
     .insert(schema.groups)
     .values({ leaderId: freshman!.id, joinCode: "123456" })
     .returning();
+  await db
+    .update(schema.registrations)
+    .set({ groupId: group!.id })
+    .where(
+      and(
+        eq(schema.registrations.studentId, freshman!.id),
+        eq(schema.registrations.project, "rpkm")
+      )
+    );
+  await db.insert(schema.registrations).values({
+    studentId: groupMate!.id,
+    project: "rpkm",
+    groupId: group!.id,
+    pdpaAcceptedAt: new Date()
+  });
   await db
     .insert(schema.groupHouseChoices)
     .values({ groupId: group!.id, houseId: house!.id, rank: 1 });
@@ -97,13 +122,14 @@ describe("GET /metrics", () => {
     const body = await response.text();
 
     // DB-state gauges reflect the seeded rows.
-    expect(body).toContain("fdrpkm_students 2");
+    expect(body).toContain("fdrpkm_students 3");
     expect(body).toContain('fdrpkm_registrations{project="firstdate"} 1');
-    expect(body).toContain('fdrpkm_registrations{project="rpkm"} 2');
+    expect(body).toContain('fdrpkm_registrations{project="rpkm"} 3');
     expect(body).toContain('fdrpkm_checkins{project="firstdate"} 1');
     expect(body).toContain("fdrpkm_groups 1");
     expect(body).toContain("fdrpkm_groups_assigned 0");
     expect(body).toContain('fdrpkm_house_capacity{house="house_a"} 100');
     expect(body).toContain('fdrpkm_house_demand{house="house_a",rank="1"} 1');
+    expect(body).toContain('fdrpkm_house_demand_students{house="house_a",rank="1"} 2');
   });
 });
