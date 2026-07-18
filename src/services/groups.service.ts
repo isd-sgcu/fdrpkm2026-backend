@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { db as defaultDb, type Database } from "@src/db";
 import { generateJoinCode, MAX_JOIN_CODE_ATTEMPTS } from "@src/utils";
@@ -8,6 +8,7 @@ import {
   houses,
   registrations,
   students,
+  user,
   type Group,
   type GroupHouseChoice,
   type Student
@@ -23,6 +24,7 @@ type GroupMember = {
   lastName: string;
   nickname: string | null;
   isLeader: boolean;
+  avatarUrl: string | null;
 };
 
 type GroupWithMembers = Group & { members: GroupMember[] };
@@ -55,10 +57,14 @@ const getGroupMembers = async (group: Group, deps: GroupsDeps = {}): Promise<Gro
       userId: students.id,
       firstName: students.firstName,
       lastName: students.lastName,
-      nickname: students.nickname
+      nickname: students.nickname,
+      avatarUrl: user.image
     })
     .from(registrations)
     .innerJoin(students, eq(registrations.studentId, students.id))
+    // students <-> user (better-auth) has no FK, only a shared case-insensitive
+    // email — same match rule as `students_email_unique`.
+    .leftJoin(user, sql`lower(${user.email}) = lower(${students.email})`)
     .where(eq(registrations.groupId, group.id));
 
   return rows.map((row) => ({ ...row, isLeader: row.userId === group.leaderId }));

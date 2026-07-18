@@ -25,7 +25,8 @@ const groupMember = t.Object({
   isLeader: t.Boolean({
     title: "Is Leader",
     description: "true if this member is the group's leader"
-  })
+  }),
+  avatarUrl: t.Nullable(t.String({ title: "Avatar URL" }))
 });
 
 export const GroupsModel = new Elysia().model({
