@@ -84,6 +84,11 @@ const houseDemandGauge = gauge(
   "Groups that picked a house at a given preference rank",
   ["house", "rank"]
 );
+const houseDemandStudentsGauge = gauge(
+  "fdrpkm_house_demand_students",
+  "Students in groups that picked a house at a given preference rank",
+  ["house", "rank"]
+);
 const houseCapacityGauge = gauge("fdrpkm_house_capacity", "Configured house capacity", ["house"]);
 const walkRallySlotGauge = gauge(
   "fdrpkm_walkrally_slot_registrations",
@@ -185,9 +190,18 @@ async function refresh(): Promise<void> {
     db.select({ size: groupSizes.size, n: count() }).from(groupSizes).groupBy(groupSizes.size),
     db.select({ house: houses.code, capacity: houses.capacity }).from(houses),
     db
-      .select({ house: houses.code, rank: groupHouseChoices.rank, n: count() })
+      .select({
+        house: houses.code,
+        rank: groupHouseChoices.rank,
+        groups: countDistinct(groupHouseChoices.groupId),
+        students: count(registrations.id)
+      })
       .from(groupHouseChoices)
       .innerJoin(houses, eq(groupHouseChoices.houseId, houses.id))
+      .leftJoin(
+        registrations,
+        and(eq(registrations.groupId, groupHouseChoices.groupId), eq(registrations.project, "rpkm"))
+      )
       .groupBy(houses.code, groupHouseChoices.rank),
     db
       .select({
@@ -282,11 +296,14 @@ async function refresh(): Promise<void> {
 
   houseCapacityGauge.reset();
   houseDemandGauge.reset();
+  houseDemandStudentsGauge.reset();
   for (const r of houseRows) {
     if (r.capacity !== null) houseCapacityGauge.set({ house: r.house }, r.capacity);
   }
   for (const r of houseDemandRows) {
-    houseDemandGauge.set({ house: r.house, rank: String(r.rank) }, Number(r.n));
+    const labels = { house: r.house, rank: String(r.rank) };
+    houseDemandGauge.set(labels, Number(r.groups));
+    houseDemandStudentsGauge.set(labels, Number(r.students));
   }
 
   walkRallySlotGauge.reset();
