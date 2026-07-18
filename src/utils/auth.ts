@@ -84,7 +84,9 @@ export const auth = betterAuth({
   // add localhost (any port) and wildcard subdomains for PR preview deploys.
   trustedOrigins: [
     "https://cufirstdate2026.com",
+    "https://www.cufirstdate2026.com",
     "https://rpkm2026.com",
+    "https://www.rpkm2026.com",
     ...(env.NODE_ENV !== "production"
       ? ["http://localhost:*", "https://*.cufirstdate2026.com", "https://*.rpkm2026.com"]
       : [])

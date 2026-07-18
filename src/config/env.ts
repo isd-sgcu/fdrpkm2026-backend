@@ -72,7 +72,14 @@ export const env = {
 // and to reject cross-site state-changing requests on cookie-authed routes
 // (CSRF defense), since better-auth's own origin check does not cover custom
 // Elysia routes like /v1/me/avatar.
-const PROD_ORIGINS = ["https://cufirstdate2026.com", "https://rpkm2026.com"];
+// Cloudflare serves each frontend at both the apex and the www subdomain, so
+// both are real browser origins in production and must be trusted.
+const PROD_ORIGINS = [
+  "https://cufirstdate2026.com",
+  "https://www.cufirstdate2026.com",
+  "https://rpkm2026.com",
+  "https://www.rpkm2026.com"
+];
 const DEV_ORIGIN_PATTERNS = [
   /^http:\/\/localhost:\d+$/,
   /^https:\/\/([a-z0-9-]+\.)?cufirstdate2026\.com$/,
