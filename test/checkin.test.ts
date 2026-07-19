@@ -139,6 +139,19 @@ describe("checkinStudent", () => {
     ).rejects.toMatchObject({ code: "ALREADY_CHECKED_IN" });
   });
 
+  it("throws STUDENT_NOT_FOUND when scanned target's CUNET id doesn't start with 69", async () => {
+    const staff = await seedStaff();
+    await seedStaffReg(staff.id, "rpkm", "rpkm");
+    const nonFreshman = await seedStudent("6600000003");
+
+    await expect(
+      checkinStudent(
+        { studentCunetId: nonFreshman.studentId, staffCunetId: staff.studentId, project: "rpkm" },
+        injected()
+      )
+    ).rejects.toMatchObject({ code: "STUDENT_NOT_FOUND" });
+  });
+
   it("allows the same student to check in to a different project", async () => {
     const staff = await seedStaff();
     await seedStaffReg(staff.id, "rpkm", "rpkm");

@@ -1,7 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import type { Database } from "@src/db";
 import { entries, registrations, students, type NewEntry } from "@src/db/schema";
-import { AppError } from "@src/utils";
+import { AppError, isFreshman } from "@src/utils";
 
 /**
  * Shared logic for "staff scans student" flows, used by both
@@ -65,6 +65,7 @@ export async function checkinStudent(
 
   const [student] = await db.select().from(students).where(eq(students.studentId, studentCunetId));
   if (!student) throw new AppError("STUDENT_NOT_FOUND");
+  if (!isFreshman(studentCunetId)) throw new AppError("STUDENT_NOT_FOUND");
 
   const staff = await assertStaffForProject({ staffCunetId, project }, deps);
 
