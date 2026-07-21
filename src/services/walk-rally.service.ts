@@ -28,9 +28,10 @@ const resolveCurrentStudent = async (studentId: string, deps: WalkRallyDeps = {}
   return student;
 };
 
-/** @desc Every activity runs on the "default" schedule except "cu_museum". */
+/** @desc Every activity runs on the "default" schedule except "cu-museum" (frontend's
+ * hyphenated activity id, sent through unchanged as the code). */
 const scheduleFor = (activityCode: string): keyof typeof WALK_RALLY.rounds =>
-  activityCode === "cu_museum" ? "cu_museum" : "default";
+  activityCode === "cu-museum" ? "cu_museum" : "default";
 
 const toMinutes = (hhmm: string) => {
   const [h, m] = hhmm.split(":").map(Number);
