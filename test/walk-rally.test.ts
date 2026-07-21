@@ -183,8 +183,8 @@ describe("WalkRallyService.getActivityRounds", () => {
 
   it("marks a round's conflict when the student booked a different activity whose time overlaps", async () => {
     const student = await createStudent("6900000001");
-    // cu_museum round 3: 13:10-13:40 — overlaps default (MG-01) round 4: 13:00-13:30.
-    const otherActivity = await createActivity("cu_museum", "museum");
+    // cu-museum round 3: 13:10-13:40 — overlaps default (MG-01) round 4: 13:00-13:30.
+    const otherActivity = await createActivity("cu-museum", "museum");
     await createActivity("MG-01", "minigame");
 
     await db.insert(schema.walkRallyRegistrations).values({
@@ -195,7 +195,7 @@ describe("WalkRallyService.getActivityRounds", () => {
 
     const result = await WalkRallyService.getActivityRounds("6900000001", "MG-01", injected());
     const round4 = result.rounds.find((r) => r.round === 4);
-    expect(round4?.conflict).toEqual({ code: "cu_museum" });
+    expect(round4?.conflict).toEqual({ code: "cu-museum" });
     // Other rounds are unaffected.
     expect(result.rounds.find((r) => r.round === 1)?.conflict).toBeUndefined();
   });
@@ -218,8 +218,8 @@ describe("WalkRallyService.getActivityRounds", () => {
 
   it("still reports conflict regardless of count", async () => {
     const student = await createStudent("6900000001");
-    // cu_museum round 4: 14:20-14:50 — overlaps default (MUS-01) round 5: 14:00-14:30.
-    const otherActivity = await createActivity("cu_museum", "museum");
+    // cu-museum round 4: 14:20-14:50 — overlaps default (MUS-01) round 5: 14:00-14:30.
+    const otherActivity = await createActivity("cu-museum", "museum");
     const thisActivity = await createActivity("MUS-01", "museum");
 
     await db.insert(schema.walkRallyRegistrations).values({
@@ -238,7 +238,7 @@ describe("WalkRallyService.getActivityRounds", () => {
     const result = await WalkRallyService.getActivityRounds("6900000001", "MUS-01", injected());
     const round5 = result.rounds.find((r) => r.round === 5);
     expect(round5?.count).toBe(30);
-    expect(round5?.conflict).toEqual({ code: "cu_museum" });
+    expect(round5?.conflict).toEqual({ code: "cu-museum" });
   });
 });
 
@@ -269,18 +269,18 @@ describe("WalkRallyService.getMe", () => {
     expect(result.points).toBe(2);
   });
 
-  it("resolves start/end from the activity's own schedule (default vs cu_museum)", async () => {
+  it("resolves start/end from the activity's own schedule (default vs cu-museum)", async () => {
     const student = await createStudent("6900000001");
     const defaultActivity = await createActivity("MUS-01");
-    const cuMuseum = await createActivity("cu_museum");
+    const cuMuseum = await createActivity("cu-museum");
     const now = new Date();
     await createRegistration(student.id, defaultActivity.id, 4, now);
     await createRegistration(student.id, cuMuseum.id, 2, now);
 
     const result = await WalkRallyService.getMe("6900000001", injected());
     const defaultReg = result.registrations.find((r) => r.code === "MUS-01");
-    const cuMuseumReg = result.registrations.find((r) => r.code === "cu_museum");
-    // default round 4 = 13:00-13:30; cu_museum round 2 = 12:35-13:05.
+    const cuMuseumReg = result.registrations.find((r) => r.code === "cu-museum");
+    // default round 4 = 13:00-13:30; cu-museum round 2 = 12:35-13:05.
     expect(defaultReg).toMatchObject({ round: 4, start: "13:00", end: "13:30" });
     expect(cuMuseumReg).toMatchObject({ round: 2, start: "12:35", end: "13:05" });
   });
@@ -289,7 +289,7 @@ describe("WalkRallyService.getMe", () => {
     const student = await createStudent("6900000001");
     const afternoon = await createActivity("MUS-01"); // default round 5: 14:00-14:30
     const morning = await createActivity("MUS-02"); // default round 1: 09:00-09:30
-    const midday = await createActivity("cu_museum"); // round 2: 12:35-13:05
+    const midday = await createActivity("cu-museum"); // round 2: 12:35-13:05
     const now = new Date();
     // Registered out of chronological order, to prove the response re-sorts them.
     await createRegistration(student.id, afternoon.id, 5, now);
@@ -297,7 +297,7 @@ describe("WalkRallyService.getMe", () => {
     await createRegistration(student.id, midday.id, 2, now);
 
     const result = await WalkRallyService.getMe("6900000001", injected());
-    expect(result.registrations.map((r) => r.code)).toEqual(["MUS-02", "cu_museum", "MUS-01"]);
+    expect(result.registrations.map((r) => r.code)).toEqual(["MUS-02", "cu-museum", "MUS-01"]);
   });
 
   it("assigns place by signup order within the (activity, round) slot, and shifts down when an earlier registrant is removed", async () => {
@@ -401,23 +401,23 @@ describe("WalkRallyService.registerForActivity", () => {
 
   it("allows the same round number on a different activity when the time slots don't overlap", async () => {
     const student = await createStudent("6900000001");
-    // default round 1: 09:00-09:30; cu_museum round 1: 12:00-12:30 -- no overlap
+    // default round 1: 09:00-09:30; cu-museum round 1: 12:00-12:30 -- no overlap
     const defaultActivity = await createActivity("MUS-01");
-    await createActivity("cu_museum");
+    await createActivity("cu-museum");
     await createRegistration(student.id, defaultActivity.id, 1, new Date());
 
     const result = await WalkRallyService.registerForActivity(
       "6900000001",
-      { code: "cu_museum", round: 1 },
+      { code: "cu-museum", round: 1 },
       injected()
     );
-    expect(result).toEqual({ code: "cu_museum", round: 1 });
+    expect(result).toEqual({ code: "cu-museum", round: 1 });
   });
 
   it("rejects a different round number whose time overlaps across schedules", async () => {
     const student = await createStudent("6900000001");
-    // cu_museum round 3: 13:10-13:40 — overlaps default (MUS-01) round 4: 13:00-13:30.
-    const cuMuseum = await createActivity("cu_museum");
+    // cu-museum round 3: 13:10-13:40 — overlaps default (MUS-01) round 4: 13:00-13:30.
+    const cuMuseum = await createActivity("cu-museum");
     await createActivity("MUS-01");
     await createRegistration(student.id, cuMuseum.id, 3, new Date());
 
@@ -618,8 +618,8 @@ describe("WalkRallyService.changeRound", () => {
 
   it("rolls back on a cross-schedule time-overlap conflict", async () => {
     const student = await createStudent("6900000001");
-    // cu_museum round 3: 13:10-13:40 — overlaps default (MUS-01) round 4: 13:00-13:30.
-    const cuMuseum = await createActivity("cu_museum");
+    // cu-museum round 3: 13:10-13:40 — overlaps default (MUS-01) round 4: 13:00-13:30.
+    const cuMuseum = await createActivity("cu-museum");
     const defaultActivity = await createActivity("MUS-01");
     await createRegistration(student.id, cuMuseum.id, 3, new Date());
     await createRegistration(student.id, defaultActivity.id, 1, new Date());
