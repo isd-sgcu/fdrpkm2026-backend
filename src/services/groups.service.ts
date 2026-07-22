@@ -121,7 +121,7 @@ const getCurrentGroup = async (studentId: string, deps: GroupsDeps = {}) => {
  * Move the caller from their current group into the group identified by `joinCode`.
  * @param studentId CUNET id of the student joining (from authMiddleware)
  * @param joinCode 6-digit code identifying the target group
- * @throws {AppError} NOT_FRESHMEN, INVALID_JOIN_CODE, LEADER_HAS_MEMBERS, GROUP_FULL, or ALREADY_CONFIRMED
+ * @throws {AppError} NOT_FRESHMEN, HOUSE_PICK_CLOSED, INVALID_JOIN_CODE, LEADER_HAS_MEMBERS, GROUP_FULL, or ALREADY_CONFIRMED
  */
 const join = async (
   studentId: string,
@@ -130,6 +130,7 @@ const join = async (
 ): Promise<GroupWithMembers> => {
   const database = deps.db ?? defaultDb;
   if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
+  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
   const student = await resolveCurrentStudent(studentId, deps);
 
   const [targetGroup] = await database.select().from(groups).where(eq(groups.joinCode, joinCode));
@@ -287,12 +288,14 @@ const regenerateJoinCode = async (studentId: string, deps: GroupsDeps = {}): Pro
  * @param studentId CUNET id of the student leaving (from authMiddleware)
  * @returns the caller's new solo group
  * @throws {AppError} NOT_FOUND if the student or their group can't be resolved,
- *   ALREADY_CONFIRMED if the group is already confirmed
+ *   ALREADY_CONFIRMED if the group is already confirmed, HOUSE_PICK_CLOSED if the
+ *   house-pick deadline has passed
  */
 const leave = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWithMembers> => {
   const database = deps.db ?? defaultDb;
   const { student, registration, group: oldGroup } = await getCurrentGroup(studentId, deps);
   if (oldGroup.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
+  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
 
   const isLeader = oldGroup.leaderId === student.id;
   const oldMembers = await getGroupMembers(oldGroup, deps);
@@ -345,7 +348,8 @@ const leave = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWit
  * @param targetUserId `students.id` (uuid) of the member to kick
  * @throws {AppError} NOT_FOUND if the student, group, or target member can't be
  *   resolved; NOT_LEADER if the caller isn't the group's leader; ALREADY_CONFIRMED if the
- *   group is already confirmed; BAD_REQUEST if the caller targets themselves (use leave instead)
+ *   group is already confirmed; HOUSE_PICK_CLOSED if the house-pick deadline has passed;
+ *   BAD_REQUEST if the caller targets themselves (use leave instead)
  */
 const kickMember = async (
   studentId: string,
@@ -356,6 +360,7 @@ const kickMember = async (
   const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
   if (group.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
+  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
   if (targetUserId === student.id) throw new AppError("BAD_REQUEST");
 
   const [targetRegistration] = await database

@@ -41,6 +41,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
           "VALIDATION",
           "UNAUTHORIZED",
           "NOT_FRESHMEN",
+          "HOUSE_PICK_CLOSED",
           "NOT_FOUND",
           "INVALID_JOIN_CODE",
           "ALREADY_CONFIRMED",
@@ -163,7 +164,13 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
       },
       response: {
         200: tSuccessResponse(GroupsModel.models.groupWithMembers.Schema()),
-        ...tAppErrors("UNAUTHORIZED", "NOT_FOUND", "ALREADY_CONFIRMED", "INTERNAL_SERVER_ERROR")
+        ...tAppErrors(
+          "UNAUTHORIZED",
+          "NOT_FOUND",
+          "ALREADY_CONFIRMED",
+          "HOUSE_PICK_CLOSED",
+          "INTERNAL_SERVER_ERROR"
+        )
       }
     }
   )
@@ -194,6 +201,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
           "NOT_LEADER",
           "NOT_FOUND",
           "ALREADY_CONFIRMED",
+          "HOUSE_PICK_CLOSED",
           "INTERNAL_SERVER_ERROR"
         )
       }

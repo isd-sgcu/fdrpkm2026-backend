@@ -191,6 +191,19 @@ describe("GroupsService — join", () => {
     // Leader A tries to join Group C (should be blocked since A has members)
     await expect(GroupsService.join("6900000001", "CCCCCC", injected())).rejects.toThrow();
   });
+
+  it("rejects joining once the house-pick window has passed", async () => {
+    const leaderA = await createStudent("6900000001", "leaderA@student.chula.ac.th");
+    const groupA = await createGroup(leaderA.id, "AAAAAA");
+    await createRegistration(leaderA.id, groupA.id);
+
+    const studentB = await createStudent("6900000002", "studentB@student.chula.ac.th");
+    const groupB = await createGroup(studentB.id, "BBBBBB");
+    await createRegistration(studentB.id, groupB.id);
+
+    mockEventPassed = true;
+    await expect(GroupsService.join("6900000002", "AAAAAA", injected())).rejects.toThrow();
+  });
 });
 
 describe("GroupsService — getMyGroup", () => {
@@ -348,6 +361,18 @@ describe("GroupsService — leave", () => {
       .where(eq(schema.groups.id, memberReg.groupId!));
     expect(memberGroup.leaderId).toBe(member.id);
   });
+
+  it("rejects leaving once the house-pick window has passed", async () => {
+    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
+    const group = await createGroup(leader.id, "AAAAAA");
+    await createRegistration(leader.id, group.id);
+
+    const member = await createStudent("6900000002", "member@student.chula.ac.th");
+    await createRegistration(member.id, group.id);
+
+    mockEventPassed = true;
+    await expect(GroupsService.leave("6900000002", injected())).rejects.toThrow();
+  });
 });
 
 describe("GroupsService — kickMember", () => {
@@ -385,5 +410,17 @@ describe("GroupsService — kickMember", () => {
     await createRegistration(member.id, group.id);
 
     await expect(GroupsService.kickMember("6900000002", leader.id, injected())).rejects.toThrow();
+  });
+
+  it("rejects kicking once the house-pick window has passed", async () => {
+    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
+    const group = await createGroup(leader.id, "AAAAAA");
+    await createRegistration(leader.id, group.id);
+
+    const member = await createStudent("6900000002", "member@student.chula.ac.th");
+    await createRegistration(member.id, group.id);
+
+    mockEventPassed = true;
+    await expect(GroupsService.kickMember("6900000001", member.id, injected())).rejects.toThrow();
   });
 });
