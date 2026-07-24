@@ -5,7 +5,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 
 import type { Database } from "../src/db";
 import * as schema from "../src/db/schema";
-import { checkinStudent } from "../src/services/checkin.helper";
+import { checkinStudent, getCheckinStatus } from "../src/services/checkin.helper";
 
 let client: PGlite;
 let db: PgliteDatabase<typeof schema>;
@@ -173,5 +173,54 @@ describe("checkinStudent", () => {
     );
 
     expect(entry.project).toBe("firstdate");
+  });
+});
+
+describe("getCheckinStatus", () => {
+  it("throws NOT_FOUND when the student has no entry for the project", async () => {
+    const student = await seedStudent();
+
+    await expect(
+      getCheckinStatus({ studentCunetId: student.studentId, project: "rpkm" }, injected())
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("throws NOT_FOUND when the CUNET id has no students row", async () => {
+    await expect(
+      getCheckinStatus({ studentCunetId: "0000000000", project: "rpkm" }, injected())
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("returns scannedAt after a successful check-in", async () => {
+    const staff = await seedStaff();
+    await seedStaffReg(staff.id, "rpkm", "rpkm");
+    const student = await seedStudent();
+
+    await checkinStudent(
+      { studentCunetId: student.studentId, staffCunetId: staff.studentId, project: "rpkm" },
+      injected()
+    );
+
+    const status = await getCheckinStatus(
+      { studentCunetId: student.studentId, project: "rpkm" },
+      injected()
+    );
+
+    expect(status.scannedAt).toBeInstanceOf(Date);
+  });
+
+  it("keeps status per project independent for the same student", async () => {
+    const staff = await seedStaff();
+    await seedStaffReg(staff.id, "rpkm", "rpkm");
+    const student = await seedStudent();
+
+    await checkinStudent(
+      { studentCunetId: student.studentId, staffCunetId: staff.studentId, project: "rpkm" },
+      injected()
+    );
+
+    await expect(
+      getCheckinStatus({ studentCunetId: student.studentId, project: "firstdate" }, injected())
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

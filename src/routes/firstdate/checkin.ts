@@ -42,4 +42,26 @@ export const fdCheckinRoutes = new Elysia({ prefix: "/checkin" })
         )
       }
     }
+  )
+  .get(
+    "/registration/status",
+    async ({ studentId }) => {
+      const result = await FirstDateService.getFirstDateCheckinStatus(studentId);
+      return successResponse(result);
+    },
+    {
+      auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["FirstDate - Check-in"],
+        summary: "Get FirstDate check-in status",
+        description:
+          "Self-serve status lookup for the authenticated freshman — no staff role required. " +
+          "404 NOT_FOUND means not checked in yet."
+      },
+      response: {
+        200: "Checkin.SuccessCheckinStatusResponse",
+        ...tAppErrors("UNAUTHORIZED", "NOT_FOUND")
+      }
+    }
   );

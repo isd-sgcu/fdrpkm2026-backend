@@ -15,8 +15,18 @@ const checkinBody = t.Object({
   student_id: t.String({ minLength: 1 })
 });
 
+const checkinStatus = t.Object(
+  {
+    scannedAt: t.Date({ title: "Scanned At" }),
+    scannedBy: t.String({ format: "uuid", title: "Scanned By (Staff ID)" })
+  },
+  { title: "Checkin Status" }
+);
+
 export const CheckinModel = new Elysia().model({
   Entry: entry,
   CheckinBody: checkinBody,
-  SuccessCheckinResponse: tSuccessResponse(entry)
+  CheckinStatus: checkinStatus,
+  SuccessCheckinResponse: tSuccessResponse(entry),
+  SuccessCheckinStatusResponse: tSuccessResponse(checkinStatus)
 });

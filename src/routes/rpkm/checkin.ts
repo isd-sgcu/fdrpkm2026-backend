@@ -46,6 +46,28 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
       }
     }
   )
+  .get(
+    "/registration/status",
+    async ({ studentId }) => {
+      const result = await RpkmService.getRegistrationCheckinStatus(studentId);
+      return successResponse(result);
+    },
+    {
+      auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Check-in"],
+        summary: "Get RPKM check-in status",
+        description:
+          "Self-serve status lookup for the authenticated freshman — no staff role required. " +
+          "404 NOT_FOUND means not checked in yet."
+      },
+      response: {
+        200: tSuccessResponse(CheckinModel.models.CheckinStatus.Schema()),
+        ...tAppErrors("UNAUTHORIZED", "NOT_FOUND")
+      }
+    }
+  )
   .post(
     "/freshmennight",
     async ({ user, body, log }) => {
@@ -76,6 +98,28 @@ export const rpkmCheckinRoutes = new Elysia({ prefix: "/checkin" })
           "STUDENT_NOT_FOUND",
           "ALREADY_CHECKED_IN"
         )
+      }
+    }
+  )
+  .get(
+    "/freshmennight/status",
+    async ({ studentId }) => {
+      const result = await RpkmService.getFreshmenNightCheckinStatus(studentId);
+      return successResponse(result);
+    },
+    {
+      auth: true,
+      detail: {
+        security: authSecurity,
+        tags: ["RPKM - Check-in"],
+        summary: "Get Freshmen Night check-in status",
+        description:
+          "Self-serve status lookup for the authenticated freshman — no staff role required. " +
+          "404 NOT_FOUND means not checked in yet."
+      },
+      response: {
+        200: tSuccessResponse(CheckinModel.models.CheckinStatus.Schema()),
+        ...tAppErrors("UNAUTHORIZED", "NOT_FOUND")
       }
     }
   );

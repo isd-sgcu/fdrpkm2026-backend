@@ -1,5 +1,5 @@
 import { type RpkmProfileResult } from "@src/models/rpkm-registration.model";
-import { checkinStudent } from "@src/services/checkin.helper";
+import { checkinStudent, getCheckinStatus } from "@src/services/checkin.helper";
 import { db } from "@src/db";
 import {
   getRegistrationMe,
@@ -100,6 +100,12 @@ const checkinRegistration = (staffCunetId: string, studentCunetId: string) =>
 const checkinFreshmenNight = (staffCunetId: string, studentCunetId: string) =>
   checkinStudent({ studentCunetId, staffCunetId, project: "freshmennight" }, { db });
 
+const getRegistrationCheckinStatus = (studentCunetId: string) =>
+  getCheckinStatus({ studentCunetId, project: "rpkm" }, { db });
+
+const getFreshmenNightCheckinStatus = (studentCunetId: string) =>
+  getCheckinStatus({ studentCunetId, project: "freshmennight" }, { db });
+
 // Namespace object — routes call `RpkmService.<fn>(...)`. The error class is
 // the shared registration core's; the alias keeps the route's instanceof
 // check stable.
@@ -109,5 +115,7 @@ export const RpkmService = {
   getProfile,
   updateProfile,
   checkinRegistration,
-  checkinFreshmenNight
+  checkinFreshmenNight,
+  getRegistrationCheckinStatus,
+  getFreshmenNightCheckinStatus
 };

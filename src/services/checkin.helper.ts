@@ -52,6 +52,24 @@ export async function assertStaffForProject(
   return staff;
 }
 
+export async function getCheckinStatus(
+  params: { studentCunetId: string; project: Exclude<CheckinProject, "walkrally"> },
+  deps: { db: Database }
+) {
+  const { studentCunetId, project } = params;
+  const { db } = deps;
+
+  const [entry] = await db
+    .select({ scannedAt: entries.scannedAt, scannedBy: entries.scannedBy })
+    .from(entries)
+    .innerJoin(students, eq(students.id, entries.studentId))
+    .where(and(eq(students.studentId, studentCunetId), eq(entries.project, project)));
+
+  if (!entry) throw new AppError("NOT_FOUND");
+
+  return entry;
+}
+
 export async function checkinStudent(
   params: {
     studentCunetId: string;

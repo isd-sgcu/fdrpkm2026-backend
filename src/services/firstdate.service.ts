@@ -1,5 +1,5 @@
 import { type FdProfileResult } from "@src/models/fd-registration.model";
-import { checkinStudent } from "@src/services/checkin.helper";
+import { checkinStudent, getCheckinStatus } from "@src/services/checkin.helper";
 import { db } from "@src/db";
 import {
   getRegistrationMe,
@@ -102,6 +102,9 @@ const getFirstDateProfile = (user: { name: string }): { name: string } => ({
 const checkinFirstDate = (staffCunetId: string, studentCunetId: string) =>
   checkinStudent({ studentCunetId, staffCunetId, project: "firstdate" }, { db });
 
+const getFirstDateCheckinStatus = (studentCunetId: string) =>
+  getCheckinStatus({ studentCunetId, project: "firstdate" }, { db });
+
 // Namespace object — routes call `FirstDateService.<fn>(...)`. The error
 // class is the shared registration core's; the alias keeps the route's
 // instanceof check stable.
@@ -111,5 +114,6 @@ export const FirstDateService = {
   getProfile,
   updateProfile,
   getFirstDateProfile,
-  checkinFirstDate
+  checkinFirstDate,
+  getFirstDateCheckinStatus
 };
