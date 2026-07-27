@@ -47,6 +47,12 @@ export const env = {
   // requires this value in an `x-dev-key` header. Unset = dev endpoints
   // always reject (fail closed).
   DEV_API_KEY: process.env.DEV_API_KEY || "",
+  // Testing-only escape hatch for the freshman gate (isFreshman, "69" prefix
+  // check) — NOT keyed off NODE_ENV, because staging runs NODE_ENV=development
+  // (see DEV_API_KEY above) and so does `bun test` by default, which would
+  // silently defeat every NOT_FRESHMEN test. Unset = gate always enforced
+  // (fail closed); only the staging deploy sets this to "true".
+  DISABLE_FRESHMAN_GATE: (process.env.DISABLE_FRESHMAN_GATE || "").toLowerCase() === "true",
   // Bearer token Prometheus must present to scrape GET /metrics (see
   // src/plugins/metrics.ts). Unset = /metrics always rejects (fail closed) —
   // must default to "" (falsy), NOT a literal, or the endpoint accepts a

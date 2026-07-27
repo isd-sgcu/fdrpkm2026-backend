@@ -90,6 +90,7 @@ export const groupRoute = new Elysia({ prefix: "/groups" })
           "NOT_LEADER",
           "NOT_FOUND",
           "ALREADY_CONFIRMED",
+          "HOUSE_PICK_CLOSED",
           "INTERNAL_SERVER_ERROR"
         )
       }

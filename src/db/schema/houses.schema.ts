@@ -32,7 +32,9 @@ export const groups = t.pgTable("groups", {
   ...timestamps
 });
 
-// ranked picks 1..5, leader writes for the whole group.
+// ranked picks 1..5, leader writes for the whole group. round distinguishes
+// round-1 (full 22-house list) picks from round-2 (limited hardcoded list)
+// picks so the same group can have both sets on file without clobbering.
 export const groupHouseChoices = t.pgTable(
   "group_house_choices",
   {
@@ -46,13 +48,19 @@ export const groupHouseChoices = t.pgTable(
       .notNull()
       .references(() => houses.id, { onDelete: "restrict" }),
     rank: t.integer("rank").notNull(),
+    round: t.integer("round").notNull().default(1),
     ...timestamps
   },
   (table) => [
-    t.unique("group_house_choices_group_rank_unique").on(table.groupId, table.rank),
-    t.unique("group_house_choices_group_house_unique").on(table.groupId, table.houseId),
+    t
+      .unique("group_house_choices_group_round_rank_unique")
+      .on(table.groupId, table.round, table.rank),
+    t
+      .unique("group_house_choices_group_round_house_unique")
+      .on(table.groupId, table.round, table.houseId),
     t.index("group_house_choices_house_id_idx").on(table.houseId),
-    t.check("group_house_choices_rank_check", sql`${table.rank} between 1 and 5`)
+    t.check("group_house_choices_rank_check", sql`${table.rank} between 1 and 5`),
+    t.check("group_house_choices_round_check", sql`${table.round} in (1, 2)`)
   ]
 );
 

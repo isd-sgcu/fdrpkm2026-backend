@@ -129,7 +129,7 @@ describe("GET /metrics", () => {
     expect(body).toContain("fdrpkm_groups 1");
     expect(body).toContain("fdrpkm_groups_assigned 0");
     expect(body).toContain('fdrpkm_house_capacity{house="house_a"} 100');
-    expect(body).toContain('fdrpkm_house_demand{house="house_a",rank="1"} 1');
-    expect(body).toContain('fdrpkm_house_demand_students{house="house_a",rank="1"} 2');
+    expect(body).toContain('fdrpkm_house_demand{house="house_a",rank="1",round="1"} 1');
+    expect(body).toContain('fdrpkm_house_demand_students{house="house_a",rank="1",round="1"} 2');
   });
 });

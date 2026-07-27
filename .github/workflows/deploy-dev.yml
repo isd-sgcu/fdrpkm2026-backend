@@ -197,7 +197,9 @@ jobs:
             local use_no_traffic="$1"
             # --update-env-vars merges only these non-secret values, preserving
             # secret references configured manually in Cloud Run.
-            local runtime_env_vars="^@^NODE_ENV=development@BETTER_AUTH_URL=${BETTER_AUTH_URL}@GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}@S3_ENDPOINT=${S3_ENDPOINT}@S3_REGION=${S3_REGION}@S3_BUCKET=${S3_BUCKET}@ASSET_BASE_URL=${ASSET_BASE_URL}"
+            # DISABLE_FRESHMAN_GATE=true: staging-only testing escape hatch (src/utils/student.ts)
+            # so QA accounts that aren't real "69..." freshmen can still exercise freshman-only flows.
+            local runtime_env_vars="^@^NODE_ENV=development@DISABLE_FRESHMAN_GATE=true@BETTER_AUTH_URL=${BETTER_AUTH_URL}@GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}@S3_ENDPOINT=${S3_ENDPOINT}@S3_REGION=${S3_REGION}@S3_BUCKET=${S3_BUCKET}@ASSET_BASE_URL=${ASSET_BASE_URL}"
             local args=(
               gcloud run deploy "${CLOUD_RUN_SERVICE_DEV}"
               --project "${GCP_PROJECT_ID}"

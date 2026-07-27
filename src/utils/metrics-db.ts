@@ -81,13 +81,13 @@ const groupsAssignedGauge = gauge(
 const groupSizeGauge = gauge("fdrpkm_group_size_groups", "RPKM groups by member count", ["size"]);
 const houseDemandGauge = gauge(
   "fdrpkm_house_demand",
-  "Groups that picked a house at a given preference rank",
-  ["house", "rank"]
+  "Groups that picked a house at a given preference rank, by round",
+  ["house", "rank", "round"]
 );
 const houseDemandStudentsGauge = gauge(
   "fdrpkm_house_demand_students",
-  "Students in groups that picked a house at a given preference rank",
-  ["house", "rank"]
+  "Students in groups that picked a house at a given preference rank, by round",
+  ["house", "rank", "round"]
 );
 const houseCapacityGauge = gauge("fdrpkm_house_capacity", "Configured house capacity", ["house"]);
 const walkRallySlotGauge = gauge(
@@ -116,8 +116,9 @@ const registrationsUngroupedGauge = gauge(
 );
 const houseAssignedStudentsGauge = gauge(
   "fdrpkm_house_assigned_students",
-  "Students whose group was assigned to a house, by house (compare with fdrpkm_house_capacity)",
-  ["house"]
+  "Students whose group was assigned to a house, by house and by which round produced the " +
+    "assignment (compare with fdrpkm_house_capacity)",
+  ["house", "round"]
 );
 const staffRegistrationsGauge = gauge(
   "fdrpkm_staff_registrations",
@@ -153,6 +154,18 @@ async function refresh(): Promise<void> {
     .where(isNotNull(registrations.groupId))
     .groupBy(registrations.groupId)
     .as("group_sizes");
+
+  // Highest round a group has picks for — 2 once it's touched round 2 (an
+  // eligible/houseless group re-picking from the round-2 list), else 1. Used
+  // to tell whether an assigned house came from round 1 or round 2's draw.
+  const groupRounds = db
+    .select({
+      groupId: groupHouseChoices.groupId,
+      round: sql<number>`max(${groupHouseChoices.round})`.as("round")
+    })
+    .from(groupHouseChoices)
+    .groupBy(groupHouseChoices.groupId)
+    .as("group_rounds");
 
   const [
     studentRows,
@@ -193,6 +206,7 @@ async function refresh(): Promise<void> {
       .select({
         house: houses.code,
         rank: groupHouseChoices.rank,
+        round: groupHouseChoices.round,
         groups: countDistinct(groupHouseChoices.groupId),
         students: count(registrations.id)
       })
@@ -202,7 +216,7 @@ async function refresh(): Promise<void> {
         registrations,
         and(eq(registrations.groupId, groupHouseChoices.groupId), eq(registrations.project, "rpkm"))
       )
-      .groupBy(houses.code, groupHouseChoices.rank),
+      .groupBy(houses.code, groupHouseChoices.rank, groupHouseChoices.round),
     db
       .select({
         activity: walkRallyActivities.code,
@@ -251,11 +265,12 @@ async function refresh(): Promise<void> {
         )
       ),
     db
-      .select({ house: houses.code, n: count() })
+      .select({ house: houses.code, round: groupRounds.round, n: count() })
       .from(registrations)
       .innerJoin(groups, eq(registrations.groupId, groups.id))
       .innerJoin(houses, eq(groups.assignedHouseId, houses.id))
-      .groupBy(houses.code),
+      .leftJoin(groupRounds, eq(groupRounds.groupId, groups.id))
+      .groupBy(houses.code, groupRounds.round),
     db
       .select({ staffRole: registrations.staffRole, n: count() })
       .from(registrations)
@@ -301,7 +316,7 @@ async function refresh(): Promise<void> {
     if (r.capacity !== null) houseCapacityGauge.set({ house: r.house }, r.capacity);
   }
   for (const r of houseDemandRows) {
-    const labels = { house: r.house, rank: String(r.rank) };
+    const labels = { house: r.house, rank: String(r.rank), round: String(r.round) };
     houseDemandGauge.set(labels, Number(r.groups));
     houseDemandStudentsGauge.set(labels, Number(r.students));
   }
@@ -328,7 +343,8 @@ async function refresh(): Promise<void> {
 
   houseAssignedStudentsGauge.reset();
   for (const r of houseAssignedRows) {
-    houseAssignedStudentsGauge.set({ house: r.house }, Number(r.n));
+    // No group_house_choices row at all (assigned without ever picking) defaults to round 1.
+    houseAssignedStudentsGauge.set({ house: r.house, round: String(r.round ?? 1) }, Number(r.n));
   }
 
   staffRegistrationsGauge.reset();

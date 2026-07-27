@@ -22,6 +22,16 @@ export const EventTime = {
     start: new Date("2026-07-23T19:00:00+07:00"),
     end: new Date("2099-12-31T23:59:59+07:00")
   },
+  /** Round 2 house choosing, for freshmen still without a house: 28-30 Jul. */
+  rpkm_house_pick_round2: {
+    start: new Date("2026-07-28T00:00:00+07:00"),
+    end: new Date("2026-07-30T12:00:00+07:00")
+  },
+  /** Round 2 house result announcement: 30 Jul evening onward. */
+  rpkm_house_result_round2: {
+    start: new Date("2026-07-30T19:00:00+07:00"),
+    end: new Date("2099-12-31T23:59:59+07:00")
+  },
   /** House activities (บ้านรับเพื่อน): 1–2 Aug. */
   rpkm_house_activity: {
     start: new Date("2026-08-01T00:00:00+07:00"),
@@ -65,6 +75,24 @@ export const EventTime = {
   }
   // Other events can be added here as needed
 };
+
+// Round 2 house selection reuses existing houses from the 22-house set —
+// not new house rows. Hardcoded per product decision (house list isn't
+// otherwise configurable yet). These are the houses wanting more freshmen:
+// house03 บ้านดัง, house04 บ้านเยิ้ม, house05 บ้านรุม, house10 บ้านอะอึ๋ม,
+// house11 บ้านคิดส์, house13 บ้านโจ๊ะเด๊ะ ฮือซา, house14 บ้านเอช้วน,
+// house18 บ้านโจ๋, house21 บ้านยิ้ม.
+export const ROUND2_HOUSE_CODES = [
+  "house03",
+  "house04",
+  "house05",
+  "house10",
+  "house11",
+  "house13",
+  "house14",
+  "house18",
+  "house21"
+];
 
 // walk rally has 2 type of round schedule, default and cu_museum.
 export const WALK_RALLY = {
