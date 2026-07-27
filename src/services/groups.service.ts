@@ -176,7 +176,6 @@ const join = async (
 ): Promise<GroupWithMembers> => {
   const database = deps.db ?? defaultDb;
   if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
-  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
   const student = await resolveCurrentStudent(studentId, deps);
 
   const [targetGroup] = await database.select().from(groups).where(eq(groups.joinCode, joinCode));
@@ -316,7 +315,8 @@ const setHousePreferences = async (
  * @param studentId CUNET id (from authMiddleware)
  * @returns the new join code
  * @throws {AppError} NOT_FOUND if the student or their group can't be resolved,
- *   NOT_LEADER if not the group's leader, ALREADY_CONFIRMED if the group is already confirmed
+ *   NOT_LEADER if not the group's leader, ALREADY_CONFIRMED if the group is already confirmed,
+ *   HOUSE_PICK_CLOSED if no round's pick window is currently open for it
  */
 const regenerateJoinCode = async (studentId: string, deps: GroupsDeps = {}): Promise<string> => {
   const database = deps.db ?? defaultDb;
