@@ -10,10 +10,19 @@ import { GroupsService } from "../src/services/groups.service";
 
 let mockEventActive = true;
 let mockEventPassed = false;
+// Round-2 windows default closed so existing round-1-focused tests are
+// unaffected; tests exercising round-2 behavior flip these explicitly.
+let mockRound2Active = false;
+let mockRound2Passed = false;
+
+const isRound2Event = (eventName: string) =>
+  eventName === "rpkm_house_pick_round2" || eventName === "rpkm_house_result_round2";
 
 mock.module("../src/utils/flags", () => ({
-  isEventActive: () => mockEventActive,
-  isEventPassed: () => mockEventPassed
+  isEventActive: (eventName: string) =>
+    isRound2Event(eventName) ? mockRound2Active : mockEventActive,
+  isEventPassed: (eventName: string) =>
+    isRound2Event(eventName) ? mockRound2Passed : mockEventPassed
 }));
 
 let client: PGlite;
@@ -45,6 +54,8 @@ afterAll(async () => {
 beforeEach(async () => {
   mockEventActive = true;
   mockEventPassed = false;
+  mockRound2Active = false;
+  mockRound2Passed = false;
   await client.exec(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE;`);
 });
 
@@ -422,5 +433,98 @@ describe("GroupsService — kickMember", () => {
 
     mockEventPassed = true;
     await expect(GroupsService.kickMember("6900000001", member.id, injected())).rejects.toThrow();
+  });
+});
+
+describe("GroupsService — round 2", () => {
+  it("unlocks a houseless, round-1-locked group for join/leave/kick/regenerate while round 2 is open", async () => {
+    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
+    // confirmedAt set — simulates round 1's post-draw lock script on a losing group.
+    const [group] = await db
+      .insert(schema.groups)
+      .values({ leaderId: leader.id, joinCode: "AAAAAA", confirmedAt: new Date() })
+      .returning();
+    await createRegistration(leader.id, group.id);
+
+    const member = await createStudent("6900000002", "member@student.chula.ac.th");
+    await createRegistration(member.id, group.id);
+
+    mockRound2Active = true;
+
+    const kicked = await GroupsService.kickMember("6900000001", member.id, injected());
+    expect(kicked.members).toHaveLength(1);
+
+    const newCode = await GroupsService.regenerateJoinCode("6900000001", injected());
+    expect(newCode).not.toBe("AAAAAA");
+
+    const left = await GroupsService.leave("6900000001", injected());
+    expect(left.leaderId).toBe(leader.id);
+  });
+
+  it("keeps a group that already has a house frozen even while round 2 is open", async () => {
+    const h1 = await createHouse("house01");
+    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
+    const group = await createGroup(leader.id, "AAAAAA", h1.id);
+    await createRegistration(leader.id, group.id);
+
+    mockRound2Active = true;
+
+    await expect(GroupsService.regenerateJoinCode("6900000001", injected())).rejects.toThrow();
+    await expect(GroupsService.leave("6900000001", injected())).rejects.toThrow();
+  });
+
+  it("auto-relocks a houseless group once round 2 closes, even without a confirmedAt script", async () => {
+    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
+    const group = await createGroup(leader.id, "AAAAAA"); // confirmedAt never set
+    await createRegistration(leader.id, group.id);
+
+    mockRound2Active = false;
+    // Round 1's window is permanently past by the time round 2 could ever be
+    // closed — that permanent isEventPassed("rpkm_house_pick") is what
+    // actually drives the auto-relock now, not a separate round-2-passed flag.
+    mockEventPassed = true;
+
+    await expect(GroupsService.regenerateJoinCode("6900000001", injected())).rejects.toThrow();
+  });
+
+  it("restricts round-2 house preferences to the round-2 whitelist and stores them under round 2", async () => {
+    const h1 = await createHouse("house03"); // in ROUND2_HOUSE_CODES
+    const h2 = await createHouse("house04"); // in ROUND2_HOUSE_CODES
+    const otherHouse = await createHouse("house01"); // not in ROUND2_HOUSE_CODES
+    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
+    const group = await createGroup(leader.id, "AAAAAA");
+    await createRegistration(leader.id, group.id);
+
+    mockRound2Active = true;
+
+    await expect(
+      GroupsService.setHousePreferences("6900000001", [otherHouse.id], injected())
+    ).rejects.toThrow();
+
+    const setRes = await GroupsService.setHousePreferences(
+      "6900000001",
+      [h1.id, h2.id],
+      injected()
+    );
+    expect(setRes.housePreferences.every((choice) => choice.round === 2)).toBe(true);
+
+    const getRes = await GroupsService.getHousePreferences("6900000001", injected());
+    expect(getRes.housePreferences).toHaveLength(2);
+    expect(getRes.housePreferences[0].houseId).toBe(h1.id);
+  });
+
+  it("rejects round-2 house preferences once neither round's pick window is open", async () => {
+    const h1 = await createHouse("house01");
+    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
+    const group = await createGroup(leader.id, "AAAAAA");
+    await createRegistration(leader.id, group.id);
+
+    mockRound2Active = false;
+    mockRound2Passed = true;
+    mockEventPassed = true; // round 1 pick window also closed
+
+    await expect(
+      GroupsService.setHousePreferences("6900000001", [h1.id], injected())
+    ).rejects.toThrow();
   });
 });

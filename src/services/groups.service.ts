@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { db as defaultDb, type Database } from "@src/db";
 import { generateJoinCode, MAX_JOIN_CODE_ATTEMPTS } from "@src/utils";
+import { ROUND2_HOUSE_CODES } from "@src/constants";
 import {
   groupHouseChoices,
   groups,
@@ -14,7 +15,7 @@ import {
   type Student
 } from "@src/db/schema";
 import { AppError, isFreshman } from "@src/utils";
-import { isEventPassed } from "@src/utils/flags";
+import { isEventActive, isEventPassed } from "@src/utils/flags";
 
 export type GroupsDeps = { db?: Database };
 
@@ -115,6 +116,51 @@ const getCurrentGroup = async (studentId: string, deps: GroupsDeps = {}) => {
   return { student, registration, group };
 };
 
+/**
+ * Guards membership-changing ops (join/leave/kick/regenerate) against a
+ * group that shouldn't be touched: a group that already has a house is
+ * frozen forever; a houseless group unlocks during the round-2 pick window
+ * regardless of a stale `confirmedAt` left over from round 1's post-draw
+ * lock script, and re-locks automatically the instant round 1's window has
+ * passed and round 2 isn't (yet, or anymore) active — covering both the
+ * 21-28 Jul gap between rounds and the period after round 2 closes, with
+ * no manual script needed for either.
+ * @throws {AppError} ALREADY_CONFIRMED if the group has a house or a legacy
+ *   round-1 lock; HOUSE_PICK_CLOSED if no round's pick window is currently open for it
+ */
+const assertGroupOpen = (group: Group) => {
+  if (group.assignedHouseId) throw new AppError("ALREADY_CONFIRMED");
+  if (isEventActive("rpkm_house_pick_round2")) return;
+  if (group.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
+  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
+};
+
+/**
+ * Which round's house preferences a leader is currently allowed to write.
+ * @throws {AppError} HOUSE_PICK_CLOSED if neither round's pick window is open for this group
+ */
+const resolveWritableRound = (group: Group): 1 | 2 => {
+  if (group.assignedHouseId) throw new AppError("HOUSE_PICK_CLOSED");
+  if (isEventActive("rpkm_house_pick_round2")) return 2;
+  if (isEventPassed("rpkm_house_pick_round2")) throw new AppError("HOUSE_PICK_CLOSED");
+  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
+  return 1;
+};
+
+/**
+ * Which round's house preferences a caller should currently see: round 2 if
+ * its window is open or the group already has round-2 picks on file, else round 1.
+ */
+const resolveReadableRound = async (group: Group, deps: GroupsDeps = {}): Promise<1 | 2> => {
+  if (isEventActive("rpkm_house_pick_round2")) return 2;
+  const database = deps.db ?? defaultDb;
+  const [round2Choice] = await database
+    .select({ id: groupHouseChoices.id })
+    .from(groupHouseChoices)
+    .where(and(eq(groupHouseChoices.groupId, group.id), eq(groupHouseChoices.round, 2)));
+  return round2Choice ? 2 : 1;
+};
+
 // --- Public API (same order as the routes in src/routes/rpkm/groups.ts) ---
 
 /**
@@ -135,7 +181,7 @@ const join = async (
 
   const [targetGroup] = await database.select().from(groups).where(eq(groups.joinCode, joinCode));
   if (!targetGroup) throw new AppError("INVALID_JOIN_CODE");
-  if (targetGroup.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
+  assertGroupOpen(targetGroup);
 
   const registration = await getCurrentRegistration(student.id, deps);
   const oldGroupId = registration.groupId;
@@ -145,7 +191,7 @@ const join = async (
 
   if (oldGroupId) {
     const [oldGroup] = await database.select().from(groups).where(eq(groups.id, oldGroupId));
-    if (oldGroup?.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
+    if (oldGroup) assertGroupOpen(oldGroup);
     if (oldGroup && oldGroup.leaderId === student.id) {
       const oldMembers = await getGroupMembers(oldGroup, deps);
       // a solo leader (no one else yet) may still hop groups; only blocked once someone's joined them.
@@ -210,23 +256,27 @@ const getHousePreferences = async (
 ): Promise<{ housePreferences: GroupHouseChoice[] }> => {
   const database = deps.db ?? defaultDb;
   const { group } = await getCurrentGroup(studentId, deps);
+  const round = await resolveReadableRound(group, deps);
   const housePreferences = await database
     .select()
     .from(groupHouseChoices)
-    .where(eq(groupHouseChoices.groupId, group.id))
+    .where(and(eq(groupHouseChoices.groupId, group.id), eq(groupHouseChoices.round, round)))
     .orderBy(asc(groupHouseChoices.rank));
 
   return { housePreferences };
 };
 
 /**
- * Replace the caller's group's whole ranked house-choice set. Leader-only.
- * Can be called any number of times while the house-pick window is open.
+ * Replace the caller's group's whole ranked house-choice set for whichever
+ * round is currently open for them. Leader-only. Can be called any number
+ * of times while that round's house-pick window is open. Round 2 additionally
+ * restricts picks to {@link ROUND2_HOUSE_CODES}.
  * @param studentId CUNET id (from authMiddleware)
  * @param houseIds ranked house ids, most preferred first (rank = index + 1)
  * @throws {AppError} NOT_FOUND if the student/group can't be resolved,
- *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if the house-pick deadline
- *   has passed, BAD_REQUEST if a houseId doesn't exist
+ *   NOT_LEADER if not the group's leader, HOUSE_PICK_CLOSED if no pick window is
+ *   currently open for this group, BAD_REQUEST if a houseId doesn't exist or
+ *   (round 2 only) isn't in the round-2 house list
  */
 const setHousePreferences = async (
   studentId: string,
@@ -236,18 +286,25 @@ const setHousePreferences = async (
   const database = deps.db ?? defaultDb;
   const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
-  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
+  const round = resolveWritableRound(group);
   // Count (1..5) and uniqueness are enforced by the route body schema
   // (Groups.HousePreferencesBody); only the DB-existence check lives here.
   const existingHouses = await database.select().from(houses).where(inArray(houses.id, houseIds));
   if (existingHouses.length !== houseIds.length) throw new AppError("BAD_REQUEST");
+  if (round === 2 && existingHouses.some((house) => !ROUND2_HOUSE_CODES.includes(house.code))) {
+    throw new AppError("BAD_REQUEST");
+  }
 
   return database.transaction(async (tx) => {
-    await tx.delete(groupHouseChoices).where(eq(groupHouseChoices.groupId, group.id));
+    await tx
+      .delete(groupHouseChoices)
+      .where(and(eq(groupHouseChoices.groupId, group.id), eq(groupHouseChoices.round, round)));
 
     const housePreferences = await tx
       .insert(groupHouseChoices)
-      .values(houseIds.map((houseId, index) => ({ groupId: group.id, houseId, rank: index + 1 })))
+      .values(
+        houseIds.map((houseId, index) => ({ groupId: group.id, houseId, rank: index + 1, round }))
+      )
       .returning();
 
     return { housePreferences };
@@ -265,7 +322,7 @@ const regenerateJoinCode = async (studentId: string, deps: GroupsDeps = {}): Pro
   const database = deps.db ?? defaultDb;
   const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
-  if (group.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
+  assertGroupOpen(group);
 
   for (let attempt = 0; attempt < MAX_JOIN_CODE_ATTEMPTS; attempt += 1) {
     const joinCode = generateJoinCode();
@@ -294,8 +351,7 @@ const regenerateJoinCode = async (studentId: string, deps: GroupsDeps = {}): Pro
 const leave = async (studentId: string, deps: GroupsDeps = {}): Promise<GroupWithMembers> => {
   const database = deps.db ?? defaultDb;
   const { student, registration, group: oldGroup } = await getCurrentGroup(studentId, deps);
-  if (oldGroup.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
-  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
+  assertGroupOpen(oldGroup);
 
   const isLeader = oldGroup.leaderId === student.id;
   const oldMembers = await getGroupMembers(oldGroup, deps);
@@ -359,8 +415,7 @@ const kickMember = async (
   const database = deps.db ?? defaultDb;
   const { student, group } = await getCurrentGroup(studentId, deps);
   if (group.leaderId !== student.id) throw new AppError("NOT_LEADER");
-  if (group.confirmedAt) throw new AppError("ALREADY_CONFIRMED");
-  if (isEventPassed("rpkm_house_pick")) throw new AppError("HOUSE_PICK_CLOSED");
+  assertGroupOpen(group);
   if (targetUserId === student.id) throw new AppError("BAD_REQUEST");
 
   const [targetRegistration] = await database

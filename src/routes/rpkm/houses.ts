@@ -18,15 +18,17 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
       security: authSecurity,
       tags: ["RPKM - Houses"],
       summary: "List all houses",
-      description: "All 22 RPKM houses with their capacity metadata."
+      description:
+        "All 22 RPKM houses with their capacity metadata, tagged with `availableInRound2` so " +
+        "the frontend can gray out houses that aren't part of round 2's limited list."
     },
-    response: { 200: t.Array(t.Ref("Houses.House")) }
+    response: { 200: t.Array(t.Ref("Houses.HouseWithAvailability")) }
   })
   .get(
     "/stats",
-    async ({ studentId }) => {
+    async ({ studentId, query }) => {
       if (!isFreshman(studentId)) throw new AppError("NOT_FRESHMEN");
-      return HousesService.getHouseStats();
+      return HousesService.getHouseStats((query.round ?? 1) as 1 | 2);
     },
     {
       auth: true,
@@ -36,8 +38,11 @@ export const houseRoute = new Elysia({ prefix: "/houses" })
         summary: "Get house demand stats",
         description:
           "Per-house demand statistics (how contested each house is) for freshmen picking " +
-          "preferences."
+          "preferences. `round` (default 1) scopes which round's rank-1 picks are counted."
       },
+      query: t.Object({
+        round: t.Optional(t.Numeric({ minimum: 1, maximum: 2, title: "Round" }))
+      }),
       response: {
         200: t.Array(t.Ref("Houses.HouseStat")),
         ...tAppErrors("UNAUTHORIZED", "NOT_FRESHMEN")

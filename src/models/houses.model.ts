@@ -13,8 +13,21 @@ import { spread } from "@src/utils/drizzle-typebox";
 const _house = createSelectSchema(houses);
 const house = t.Object(spread(_house));
 
+// availableInRound2 isn't a DB column — it's derived from the hardcoded
+// ROUND2_HOUSE_CODES whitelist (src/constants.ts) — so it's merged onto the
+// drizzle-typebox shape by hand instead of coming from spread(_house).
+const houseWithAvailability = t.Object({
+  ...house.properties,
+  availableInRound2: t.Boolean({
+    title: "Available In Round 2",
+    description:
+      "Whether this house is selectable in round 2 — false means the frontend should gray it out"
+  })
+});
+
 export const HousesModel = new Elysia().model({
   house,
+  houseWithAvailability,
   houseId: t.Object({
     id: t.String({ format: "uuid", title: "House ID" })
   }),

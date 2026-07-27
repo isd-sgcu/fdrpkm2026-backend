@@ -10,10 +10,19 @@ import { HousesService } from "../src/services/houses.service";
 
 let mockEventActive = true;
 let mockEventPassed = false;
+// Round-2 windows default closed so existing round-1-focused tests are
+// unaffected; tests exercising round-2 behavior flip these explicitly.
+let mockRound2Active = false;
+let mockRound2Passed = false;
+
+const isRound2Event = (eventName: string) =>
+  eventName === "rpkm_house_pick_round2" || eventName === "rpkm_house_result_round2";
 
 mock.module("../src/utils/flags", () => ({
-  isEventActive: () => mockEventActive,
-  isEventPassed: () => mockEventPassed
+  isEventActive: (eventName: string) =>
+    isRound2Event(eventName) ? mockRound2Active : mockEventActive,
+  isEventPassed: (eventName: string) =>
+    isRound2Event(eventName) ? mockRound2Passed : mockEventPassed
 }));
 
 let client: PGlite;
@@ -45,6 +54,8 @@ afterAll(async () => {
 beforeEach(async () => {
   mockEventActive = true;
   mockEventPassed = false;
+  mockRound2Active = false;
+  mockRound2Passed = false;
   await client.exec(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE;`);
 });
 
@@ -141,7 +152,7 @@ describe("HousesService", () => {
     await createRegistration(leaderB.id, groupB.id);
     await GroupsService.setHousePreferences("6900000003", [h2.id, h1.id], injected());
 
-    const stats = await HousesService.getHouseStats(injected());
+    const stats = await HousesService.getHouseStats(1, injected());
     expect(stats).toHaveLength(2);
     // H1 has 2 applicants (from Group A rank 1), H2 has 1 applicant (from Group B rank 1)
     // Rank 2 choices (H2 for Group A, H1 for Group B) must NOT contribute to stats.
@@ -173,5 +184,49 @@ describe("HousesService", () => {
     mockEventActive = false; // result inactive
 
     await expect(HousesService.getHouseResult("6900000001", injected())).rejects.toThrow();
+  });
+
+  it("getHouseStats(2) only counts round-2 rank-1 picks, ignoring leftover round-1 picks", async () => {
+    const h1 = await createHouse("house01");
+    const h2 = await createHouse("house02");
+
+    const leaderA = await createStudent("6900000001", "leaderA@student.chula.ac.th");
+    const groupA = await createGroup(leaderA.id, "AAAAAA");
+    await createRegistration(leaderA.id, groupA.id);
+    // stale round-1 pick on house01 — must NOT count toward round-2 stats.
+    await db
+      .insert(schema.groupHouseChoices)
+      .values({ groupId: groupA.id, houseId: h1.id, rank: 1, round: 1 });
+    // real round-2 pick on house02.
+    await db
+      .insert(schema.groupHouseChoices)
+      .values({ groupId: groupA.id, houseId: h2.id, rank: 1, round: 2 });
+
+    const round1Stats = await HousesService.getHouseStats(1, injected());
+    const round2Stats = await HousesService.getHouseStats(2, injected());
+
+    expect(round1Stats.find((s) => s.houseId === h1.id)?.count).toBe(1);
+    expect(round1Stats.find((s) => s.houseId === h2.id)?.count).toBe(0);
+    expect(round2Stats.find((s) => s.houseId === h1.id)?.count).toBe(0);
+    expect(round2Stats.find((s) => s.houseId === h2.id)?.count).toBe(1);
+  });
+
+  it("getHouseResult gates a round-2 participant on the round-2 announce window, not round 1's", async () => {
+    const h1 = await createHouse("house01");
+    const leader = await createStudent("6900000001", "leader@student.chula.ac.th");
+    const group = await createGroup(leader.id, "AAAAAA", h1.id); // round-2 draw result
+    await createRegistration(leader.id, group.id);
+    await db
+      .insert(schema.groupHouseChoices)
+      .values({ groupId: group.id, houseId: h1.id, rank: 1, round: 2 });
+
+    mockEventActive = true; // round-1 announce window is (open-endedly) active
+    mockRound2Active = false; // round-2 announce hasn't happened yet
+
+    await expect(HousesService.getHouseResult("6900000001", injected())).rejects.toThrow();
+
+    mockRound2Active = true;
+    const house = await HousesService.getHouseResult("6900000001", injected());
+    expect(house?.code).toBe("house01");
   });
 });
