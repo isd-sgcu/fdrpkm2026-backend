@@ -122,10 +122,9 @@ const houseAssignedStudentsGauge = gauge(
 );
 const houseCheckedInStudentsGauge = gauge(
   "fdrpkm_house_checkedin_students",
-  "Students checked in (rpkm) whose group was assigned to a house, by house, tagged with " +
-    "the house's total assigned student count (divide by this in Grafana for check-in %) " +
-    "and size tier",
-  ["house", "house_th", "assigned", "size"]
+  "Students checked in (rpkm) whose group was assigned to a house, by house. Divide by " +
+    "sum(fdrpkm_house_assigned_students) by (house) in Grafana for check-in %",
+  ["house", "house_th", "size"]
 );
 const staffRegistrationsGauge = gauge(
   "fdrpkm_staff_registrations",
@@ -291,7 +290,6 @@ async function refresh(): Promise<void> {
         house: houses.code,
         houseTh: houseNameTh,
         size: houseSize,
-        assigned: count(registrations.id),
         n: count(entries.id)
       })
       .from(registrations)
@@ -385,12 +383,7 @@ async function refresh(): Promise<void> {
   houseCheckedInStudentsGauge.reset();
   for (const r of houseCheckedInRows) {
     houseCheckedInStudentsGauge.set(
-      {
-        house: r.house,
-        house_th: r.houseTh ?? "",
-        assigned: String(r.assigned),
-        size: r.size ?? ""
-      },
+      { house: r.house, house_th: r.houseTh ?? "", size: r.size ?? "" },
       Number(r.n)
     );
   }
