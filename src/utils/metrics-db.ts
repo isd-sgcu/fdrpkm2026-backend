@@ -120,6 +120,11 @@ const houseAssignedStudentsGauge = gauge(
     "assignment (compare with fdrpkm_house_capacity)",
   ["house", "round"]
 );
+const houseCheckedInStudentsGauge = gauge(
+  "fdrpkm_house_checkedin_students",
+  "Students checked in (rpkm) whose group was assigned to a house, by house",
+  ["house", "house_th"]
+);
 const staffRegistrationsGauge = gauge(
   "fdrpkm_staff_registrations",
   "Staff registrations, by staff role",
@@ -167,6 +172,9 @@ async function refresh(): Promise<void> {
     .groupBy(groupHouseChoices.groupId)
     .as("group_rounds");
 
+  // Thai display name lives nested in houses.info (jsonb), not a plain column.
+  const houseNameTh = sql<string>`${houses.info}->'name'->>'th'`;
+
   const [
     studentRows,
     registrationRows,
@@ -182,6 +190,7 @@ async function refresh(): Promise<void> {
     sessionRows,
     ungroupedRows,
     houseAssignedRows,
+    houseCheckedInRows,
     staffRegistrationRows,
     checkpointScanRows,
     attendedDaysRows,
@@ -272,6 +281,20 @@ async function refresh(): Promise<void> {
       .leftJoin(groupRounds, eq(groupRounds.groupId, groups.id))
       .groupBy(houses.code, groupRounds.round),
     db
+      .select({ house: houses.code, houseTh: houseNameTh, n: count() })
+      .from(entries)
+      .innerJoin(
+        registrations,
+        and(
+          eq(registrations.studentId, entries.studentId),
+          eq(registrations.project, entries.project)
+        )
+      )
+      .innerJoin(groups, eq(registrations.groupId, groups.id))
+      .innerJoin(houses, eq(groups.assignedHouseId, houses.id))
+      .where(eq(entries.project, "rpkm"))
+      .groupBy(houses.code, houseNameTh),
+    db
       .select({ staffRole: registrations.staffRole, n: count() })
       .from(registrations)
       .where(isNotNull(registrations.staffRole))
@@ -345,6 +368,11 @@ async function refresh(): Promise<void> {
   for (const r of houseAssignedRows) {
     // No group_house_choices row at all (assigned without ever picking) defaults to round 1.
     houseAssignedStudentsGauge.set({ house: r.house, round: String(r.round ?? 1) }, Number(r.n));
+  }
+
+  houseCheckedInStudentsGauge.reset();
+  for (const r of houseCheckedInRows) {
+    houseCheckedInStudentsGauge.set({ house: r.house, house_th: r.houseTh ?? "" }, Number(r.n));
   }
 
   staffRegistrationsGauge.reset();
