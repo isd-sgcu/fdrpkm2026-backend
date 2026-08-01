@@ -122,8 +122,10 @@ const houseAssignedStudentsGauge = gauge(
 );
 const houseCheckedInStudentsGauge = gauge(
   "fdrpkm_house_checkedin_students",
-  "Students checked in (rpkm) whose group was assigned to a house, by house",
-  ["house", "house_th"]
+  "Students checked in (rpkm) whose group was assigned to a house, by house, tagged with " +
+    "the house's total assigned student count (divide by this in Grafana for check-in %) " +
+    "and size tier",
+  ["house", "house_th", "assigned", "size"]
 );
 const staffRegistrationsGauge = gauge(
   "fdrpkm_staff_registrations",
@@ -172,8 +174,9 @@ async function refresh(): Promise<void> {
     .groupBy(groupHouseChoices.groupId)
     .as("group_rounds");
 
-  // Thai display name lives nested in houses.info (jsonb), not a plain column.
+  // Thai display name and size tier live nested in houses.info (jsonb), not plain columns.
   const houseNameTh = sql<string>`${houses.info}->'name'->>'th'`;
+  const houseSize = sql<string>`${houses.info}->>'size'`;
 
   const [
     studentRows,
@@ -280,20 +283,29 @@ async function refresh(): Promise<void> {
       .innerJoin(houses, eq(groups.assignedHouseId, houses.id))
       .leftJoin(groupRounds, eq(groupRounds.groupId, groups.id))
       .groupBy(houses.code, groupRounds.round),
+    // From assigned rpkm registrations (not entries) so a house with zero check-ins
+    // so far still emits a row with n=0 instead of vanishing from the metric —
+    // Grafana's checked-in/assigned % panel needs the 0% case to actually show up.
     db
-      .select({ house: houses.code, houseTh: houseNameTh, n: count() })
-      .from(entries)
-      .innerJoin(
-        registrations,
-        and(
-          eq(registrations.studentId, entries.studentId),
-          eq(registrations.project, entries.project)
-        )
-      )
+      .select({
+        house: houses.code,
+        houseTh: houseNameTh,
+        size: houseSize,
+        assigned: count(registrations.id),
+        n: count(entries.id)
+      })
+      .from(registrations)
       .innerJoin(groups, eq(registrations.groupId, groups.id))
       .innerJoin(houses, eq(groups.assignedHouseId, houses.id))
-      .where(eq(entries.project, "rpkm"))
-      .groupBy(houses.code, houseNameTh),
+      .leftJoin(
+        entries,
+        and(
+          eq(entries.studentId, registrations.studentId),
+          eq(entries.project, registrations.project)
+        )
+      )
+      .where(eq(registrations.project, "rpkm"))
+      .groupBy(houses.code, houseNameTh, houseSize),
     db
       .select({ staffRole: registrations.staffRole, n: count() })
       .from(registrations)
@@ -372,7 +384,15 @@ async function refresh(): Promise<void> {
 
   houseCheckedInStudentsGauge.reset();
   for (const r of houseCheckedInRows) {
-    houseCheckedInStudentsGauge.set({ house: r.house, house_th: r.houseTh ?? "" }, Number(r.n));
+    houseCheckedInStudentsGauge.set(
+      {
+        house: r.house,
+        house_th: r.houseTh ?? "",
+        assigned: String(r.assigned),
+        size: r.size ?? ""
+      },
+      Number(r.n)
+    );
   }
 
   staffRegistrationsGauge.reset();
