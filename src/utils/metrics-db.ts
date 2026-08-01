@@ -137,8 +137,9 @@ const groupsConfirmedGauge = gauge(
 );
 const checkpointScansGauge = gauge(
   "fdrpkm_checkpoint_scans",
-  "Scans per checkpoint; a checkpoint stuck at 0 while others climb is likely a dead QR",
-  ["game", "checkpoint"]
+  "Scans per checkpoint; a checkpoint stuck at 0 while others climb is likely a dead QR. " +
+    "Tagged with lat/lng for map visualizations",
+  ["game", "checkpoint", "lat", "lng"]
 );
 const attendedDaysGauge = gauge(
   "fdrpkm_attended_days",
@@ -312,10 +313,16 @@ async function refresh(): Promise<void> {
     // LEFT JOIN from checkpoints so a checkpoint nobody scanned reports 0
     // instead of disappearing — that's the dead-QR signal.
     db
-      .select({ game: checkpoints.game, checkpoint: checkpoints.code, n: count(scans.id) })
+      .select({
+        game: checkpoints.game,
+        checkpoint: checkpoints.code,
+        lat: checkpoints.lat,
+        lng: checkpoints.lng,
+        n: count(scans.id)
+      })
       .from(checkpoints)
       .leftJoin(scans, eq(scans.checkpointId, checkpoints.id))
-      .groupBy(checkpoints.game, checkpoints.code),
+      .groupBy(checkpoints.game, checkpoints.code, checkpoints.lat, checkpoints.lng),
     db
       .select({ days: registrations.attendedDays, n: count() })
       .from(registrations)
@@ -395,7 +402,15 @@ async function refresh(): Promise<void> {
 
   checkpointScansGauge.reset();
   for (const r of checkpointScanRows) {
-    checkpointScansGauge.set({ game: r.game, checkpoint: r.checkpoint }, Number(r.n));
+    checkpointScansGauge.set(
+      {
+        game: r.game,
+        checkpoint: r.checkpoint,
+        lat: r.lat !== null ? String(r.lat) : "",
+        lng: r.lng !== null ? String(r.lng) : ""
+      },
+      Number(r.n)
+    );
   }
 
   attendedDaysGauge.reset();
